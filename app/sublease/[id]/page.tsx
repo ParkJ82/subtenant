@@ -1,0 +1,295 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import { RoomWithDetails } from '@/lib/types';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { MapPin, Calendar, Mail, ArrowLeft, Loader2, ChevronDown, ChevronUp, Building, Home } from 'lucide-react';
+
+export default function SubleaseInfoPage() {
+  const params = useParams();
+  const router = useRouter();
+  const [room, setRoom] = useState<RoomWithDetails | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [showFullDescription, setShowFullDescription] = useState(false);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
+
+  useEffect(() => {
+    loadData();
+  }, [params.id]);
+
+  const loadData = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(`/api/rooms/${params.id}`);
+      if (!response.ok) throw new Error('Failed to fetch room');
+      const data = await response.json();
+      setRoom(data);
+    } catch (err) {
+      console.error('Failed to load data:', err);
+      setError('Failed to load room information.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleContact = () => {
+    if (room) {
+      window.location.href = `mailto:${room.subleasor.account.email}?subject=SubTenants - Regarding ${room.suite.property.address}`;
+    }
+  };
+
+  const handleApply = () => {
+    if (room) {
+      window.location.href = `mailto:${room.subleasor.account.email}?subject=SubTenants - Application for ${room.suite.property.propertyName}&body=Hi ${room.subleasor.account.name},%0D%0A%0D%0AI'm interested in applying for your room at ${room.suite.property.address}.%0D%0A%0D%0APlease let me know if you'd like to schedule a viewing or discuss further.%0D%0A%0D%0AThank you!`;
+    }
+  };
+
+  const formatDate = (date: Date | string | null) => {
+    if (!date) return 'Not specified';
+    return new Date(date).toLocaleDateString('en-US', {
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
+    });
+  };
+
+  const nextImage = () => {
+    if (room && room.photos.length > 0) {
+      setCurrentImageIndex((currentImageIndex + 1) % room.photos.length);
+    }
+  };
+
+  const prevImage = () => {
+    if (room && room.photos.length > 0) {
+      setCurrentImageIndex(
+        currentImageIndex === 0 ? room.photos.length - 1 : currentImageIndex - 1
+      );
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+      </div>
+    );
+  }
+
+  if (error || !room) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-gray-500 text-lg mb-4">{error || 'Sublease not found'}</p>
+          <Button onClick={() => router.back()}>Go Back</Button>
+        </div>
+      </div>
+    );
+  }
+
+  const description = room.description || '';
+  const shouldTruncate = description.length > 200;
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <Button
+          variant="ghost"
+          onClick={() => router.back()}
+          className="mb-6"
+        >
+          <ArrowLeft className="w-4 h-4 mr-2" />
+          Back
+        </Button>
+
+        <div className="space-y-6">
+          <Card>
+            <CardContent className="p-0">
+              <div className="relative h-64 md:h-96 bg-gray-100">
+                {room.photos.length > 0 ? (
+                  <>
+                    <img
+                      src={room.photos[currentImageIndex].photoUrl}
+                      alt={room.suite.property.propertyName}
+                      className="w-full h-full object-cover"
+                    />
+                    {room.photos.length > 1 && (
+                      <>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="absolute left-4 top-1/2 -translate-y-1/2 bg-white/90"
+                          onClick={prevImage}
+                        >
+                          <ChevronUp className="w-5 h-5 -rotate-90" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="absolute right-4 top-1/2 -translate-y-1/2 bg-white/90"
+                          onClick={nextImage}
+                        >
+                          <ChevronDown className="w-5 h-5 rotate-90" />
+                        </Button>
+                        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
+                          {room.photos.map((_, index) => (
+                            <div
+                              key={index}
+                              className={`w-2 h-2 rounded-full ${
+                                index === currentImageIndex ? 'bg-white' : 'bg-white/50'
+                              }`}
+                            />
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </>
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-gray-400">
+                    No images available
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                <div className="flex-1">
+                  <CardTitle className="text-2xl mb-2">{room.suite.property.propertyName}</CardTitle>
+                  <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600">
+                    <div className="flex items-center">
+                      <MapPin className="w-4 h-4 mr-1" />
+                      <span>{room.suite.property.address}, {room.suite.property.city}, {room.suite.property.state}</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-3xl font-bold text-gray-900">
+                    ${room.monthlyRent}
+                    <span className="text-lg font-normal text-gray-500">/month</span>
+                  </div>
+                  <div className="flex items-center text-sm text-gray-600 justify-end mt-1">
+                    <Calendar className="w-4 h-4 mr-1" />
+                    <span>
+                      {formatDate(room.availableFrom)} - {formatDate(room.availableTo)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </CardHeader>
+
+            <CardContent className="space-y-6">
+              <div>
+                <h3 className="font-semibold text-gray-900 mb-2">Property Details</h3>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div className="flex items-center text-gray-600">
+                    <Building className="w-4 h-4 mr-2" />
+                    <span>{room.suite.property.propertyType}</span>
+                  </div>
+                  {room.suite.property.yearBuilt && (
+                    <div className="flex items-center text-gray-600">
+                      <span>Built: {room.suite.property.yearBuilt}</span>
+                    </div>
+                  )}
+                  {room.suite.suiteNumber && (
+                    <div className="flex items-center text-gray-600">
+                      <span>Suite: {room.suite.suiteNumber}</span>
+                    </div>
+                  )}
+                  {room.suite.floor && (
+                    <div className="flex items-center text-gray-600">
+                      <span>Floor: {room.suite.floor}</span>
+                    </div>
+                  )}
+                  {room.suite.totalRooms && (
+                    <div className="flex items-center text-gray-600">
+                      <Home className="w-4 h-4 mr-2" />
+                      <span>{room.suite.totalRooms} rooms</span>
+                    </div>
+                  )}
+                  {room.suite.totalBathrooms && (
+                    <div className="flex items-center text-gray-600">
+                      <span>{room.suite.totalBathrooms} bathrooms</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {room.suite.property.description && (
+                <div>
+                  <h3 className="font-semibold text-gray-900 mb-2">Property Description</h3>
+                  <p className="text-gray-600 leading-relaxed">
+                    {room.suite.property.description}
+                  </p>
+                </div>
+              )}
+
+              {room.suite.description && (
+                <div>
+                  <h3 className="font-semibold text-gray-900 mb-2">Suite Description</h3>
+                  <p className="text-gray-600 leading-relaxed">
+                    {room.suite.description}
+                  </p>
+                </div>
+              )}
+
+              {description && (
+                <div>
+                  <h3 className="font-semibold text-gray-900 mb-2">Room Description</h3>
+                  <p className="text-gray-600 leading-relaxed">
+                    {showFullDescription || !shouldTruncate
+                      ? description
+                      : `${description.slice(0, 200)}...`}
+                    {shouldTruncate && (
+                      <Button
+                        variant="link"
+                        className="p-0 h-auto text-blue-600"
+                        onClick={() => setShowFullDescription(!showFullDescription)}
+                      >
+                        {showFullDescription ? 'Show less' : 'Read more'}
+                      </Button>
+                    )}
+                  </p>
+                </div>
+              )}
+
+              {room.amenities.length > 0 && (
+                <div>
+                  <h3 className="font-semibold text-gray-900 mb-2">Amenities</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {room.amenities.map((amenity) => (
+                      <Badge key={amenity.amenityID} variant="secondary">
+                        {amenity.amenityName}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <h3 className="font-semibold text-gray-900 mb-2">Listed By</h3>
+                <Badge variant="secondary">{room.subleasor.account.name}</Badge>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t">
+                <Button onClick={handleContact} variant="outline" className="flex-1">
+                  <Mail className="w-4 h-4 mr-2" />
+                  Contact Subleasor
+                </Button>
+                <Button onClick={handleApply} className="flex-1">
+                  Apply for Room
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
+}
