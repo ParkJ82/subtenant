@@ -81,7 +81,10 @@ export default function CreateListingPage() {
     try {
       const response = await fetch('/api/tenants', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify(tenantForm),
       });
 
@@ -116,15 +119,18 @@ export default function CreateListingPage() {
         }),
       });
 
-      if (!response.ok) throw new Error('Failed to create room');
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to create room');
+      }
 
       setSuccess(true);
       setTimeout(() => {
         router.push('/find-subleases');
       }, 2000);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to create room listing:', error);
-      alert('Failed to create room listing. Please try again.');
+      alert(error?.message || 'Failed to create room listing. Please try again.');
     } finally {
       setSubmitting(false);
     }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { tenantApi } from '@/lib/api';
+import { getUserIdFromRequest } from '@/lib/api-auth';
 
 export async function GET(request: NextRequest) {
   try {
@@ -35,9 +36,13 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const userId = getUserIdFromRequest(request);
+  if (!userId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
   try {
     const body = await request.json();
-    const tenant = await tenantApi.create(body);
+    const tenant = await tenantApi.create(userId, body);
     return NextResponse.json(tenant, { status: 201 });
   } catch (error) {
     console.error('Error creating tenant:', error);

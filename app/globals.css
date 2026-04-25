@@ -127,4 +127,21 @@
   html {
     @apply font-sans;
   }
+  button,
+  [role="button"],
+  [role="tab"],
+  input[type="submit"],
+  input[type="button"],
+  input[type="reset"],
+  input[type="checkbox"],
+  input[type="radio"],
+  select,
+  a {
+    cursor: pointer;
+  }
+  button:disabled,
+  input[type="submit"]:disabled,
+  input[type="button"]:disabled {
+    cursor: not-allowed;
+  }
 }

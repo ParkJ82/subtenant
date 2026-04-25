@@ -1,5 +1,4 @@
 import { query } from '../db';
-import { hashPassword } from '../security';
 import {
   Tenant,
   Subleasor,
@@ -43,6 +42,23 @@ export const accountApi = {
     const sql = 'SELECT * FROM Account WHERE accountID = ?';
     const result = await query(sql, [accountID]) as any[];
     return result[0] || null;
+  },
+
+  update: async (accountID: number, data: { name?: string; bio?: string; dateOfBirth?: string; phoneNumber?: string }): Promise<boolean> => {
+    const updates: string[] = [];
+    const params: any[] = [];
+
+    if (data.name !== undefined) { updates.push('name = ?'); params.push(data.name); }
+    if (data.bio !== undefined) { updates.push('bio = ?'); params.push(data.bio || null); }
+    if (data.dateOfBirth !== undefined) { updates.push('dateOfBirth = ?'); params.push(data.dateOfBirth || null); }
+    if (data.phoneNumber !== undefined) { updates.push('phoneNumber = ?'); params.push(data.phoneNumber || null); }
+
+    if (updates.length === 0) return false;
+
+    params.push(accountID);
+    const sql = `UPDATE Account SET ${updates.join(', ')} WHERE accountID = ?`;
+    await query(sql, params);
+    return true;
   },
 };
 
@@ -156,27 +172,12 @@ export const tenantApi = {
     };
   },
 
-  create: async (data: TenantFormData): Promise<Tenant> => {
-    // Hash password before storing
-    const hashedPassword = await hashPassword(data.password);
-    // First create account
-    const accountResult = await accountApi.create({
-      name: data.name,
-      email: data.email,
-      password: hashedPassword,
-      bio: data.bio,
-      dateOfBirth: data.dateOfBirth,
-      phoneNumber: data.phoneNumber,
-    });
-
-    const accountID = (accountResult as any).insertId;
-
-    // Then create tenant
-    const tenantSql = `
+  create: async (accountID: number, data: { companyName?: string; availableFrom?: string; availableTo?: string }): Promise<Tenant> => {
+    const sql = `
       INSERT INTO Tenant (accountID, isListed, companyName, availableFrom, availableTo)
       VALUES (?, TRUE, ?, ?, ?)
     `;
-    const tenantResult = await query(tenantSql, [
+    const result = await query(sql, [
       accountID,
       data.companyName || null,
       data.availableFrom || null,
@@ -184,7 +185,7 @@ export const tenantApi = {
     ]);
 
     return {
-      tenantID: (tenantResult as any).insertId,
+      tenantID: (result as any).insertId,
       accountID,
       isListed: true,
       companyName: data.companyName || null,
@@ -193,21 +194,25 @@ export const tenantApi = {
     };
   },
 
-  update: async (tenantID: number, data: Partial<TenantFormData>): Promise<boolean> => {
+  update: async (tenantID: number, data: Partial<TenantFormData> & { isListed?: boolean }): Promise<boolean> => {
     const updates: string[] = [];
     const params: any[] = [];
 
     if (data.companyName !== undefined) {
       updates.push('companyName = ?');
-      params.push(data.companyName);
+      params.push(data.companyName || null);
     }
     if (data.availableFrom !== undefined) {
       updates.push('availableFrom = ?');
-      params.push(data.availableFrom);
+      params.push(data.availableFrom || null);
     }
     if (data.availableTo !== undefined) {
       updates.push('availableTo = ?');
-      params.push(data.availableTo);
+      params.push(data.availableTo || null);
+    }
+    if (data.isListed !== undefined) {
+      updates.push('isListed = ?');
+      params.push(data.isListed ? 1 : 0);
     }
 
     if (updates.length === 0) return false;
@@ -435,6 +440,98 @@ export const roomApi = {
     };
   },
 
+  getByAccountId: async (accountID: number): Promise<RoomWithDetails | null> => {
+    const sql = `
+      SELECT
+        r.*,
+        s.suiteID,
+        s.suiteNumber,
+        s.floor,
+        s.totalRooms,
+        s.totalBathrooms,
+        s.description as suiteDescription,
+        p.propertyID,
+        p.propertyName,
+        p.propertyType,
+        p.address,
+        p.city,
+        p.state,
+        p.yearBuilt,
+        p.description as propertyDescription,
+        sub.subleasorID,
+        sub.accountID as subleasorAccountID,
+        a.name as subleasorName,
+        a.email as subleasorEmail
+      FROM RoomInfo r
+      JOIN SuiteInfo s ON r.suiteID = s.suiteID
+      JOIN Property p ON s.propertyID = p.propertyID
+      JOIN Subleasor sub ON r.subleasorID = sub.subleasorID
+      JOIN Account a ON sub.accountID = a.accountID
+      WHERE sub.accountID = ?
+    `;
+    const result = await query(sql, [accountID]) as any[];
+    if (!result[0]) return null;
+
+    const row = result[0];
+
+    const photos = await query(
+      'SELECT * FROM ListingPhoto WHERE roomID = ?',
+      [row.roomID]
+    ) as any[];
+
+    const amenities = await query(`
+      SELECT a.* FROM Amenity a
+      JOIN RoomAmenity ra ON a.amenityID = ra.amenityID
+      WHERE ra.roomID = ?
+    `, [row.roomID]) as any[];
+
+    return {
+      roomID: row.roomID,
+      suiteID: row.suiteID,
+      subleasorID: row.subleasorID,
+      createdAt: row.createdAt,
+      isListed: row.isListed,
+      monthlyRent: parseFloat(row.monthlyRent),
+      availableFrom: row.availableFrom,
+      availableTo: row.availableTo,
+      description: row.description,
+      suite: {
+        suiteID: row.suiteID,
+        propertyID: row.propertyID,
+        suiteNumber: row.suiteNumber,
+        floor: row.floor,
+        totalRooms: row.totalRooms,
+        totalBathrooms: row.totalBathrooms,
+        description: row.suiteDescription,
+        property: {
+          propertyID: row.propertyID,
+          propertyName: row.propertyName,
+          propertyType: row.propertyType,
+          address: row.address,
+          city: row.city,
+          state: row.state,
+          yearBuilt: row.yearBuilt,
+          description: row.propertyDescription,
+        },
+      },
+      subleasor: {
+        subleasorID: row.subleasorID,
+        accountID: row.subleasorAccountID,
+        account: {
+          accountID: row.subleasorAccountID,
+          name: row.subleasorName,
+          email: row.subleasorEmail,
+          bio: null,
+          dateOfBirth: null,
+          phoneNumber: null,
+          password: '',
+        },
+      },
+      photos,
+      amenities,
+    };
+  },
+
   create: async (data: RoomFormData, subleasorAccountID: number): Promise<RoomInfo> => {
     // Create property
     const propertySql = `
@@ -471,6 +568,16 @@ export const roomApi = {
     let subleasor = await subleasorApi.getByAccountId(subleasorAccountID);
     if (!subleasor) {
       subleasor = await subleasorApi.create(subleasorAccountID);
+    }
+
+    // Enforce the UNIQUE constraint up-front so we return a clear error
+    // instead of letting MySQL throw a cryptic duplicate-key error
+    const existingRoom = await query(
+      'SELECT roomID FROM RoomInfo WHERE subleasorID = ?',
+      [subleasor.subleasorID]
+    ) as any[];
+    if (existingRoom.length > 0) {
+      throw new Error('DUPLICATE_LISTING');
     }
 
     // Create room
@@ -596,6 +703,11 @@ export const applicationApi = {
     return true;
   },
 
+  delete: async (applicationID: number): Promise<boolean> => {
+    await query('DELETE FROM Application WHERE applicationID = ?', [applicationID]);
+    return true;
+  },
+
   getByTenantIdWithDetails: async (tenantID: number) => {
     const sql = `
       SELECT
@@ -610,6 +722,43 @@ export const applicationApi = {
       ORDER BY a.appliedAt DESC
     `;
     return await query(sql, [tenantID]) as any[];
+  },
+
+  getReceivedByAccountId: async (accountID: number) => {
+    const sql = `
+      SELECT
+        a.applicationID, a.tenantID, a.roomID, a.status, a.message, a.appliedAt,
+        r.monthlyRent,
+        p.propertyName, p.address, p.city, p.state,
+        acc.name  AS applicantName,
+        acc.email AS applicantEmail
+      FROM Application a
+      JOIN RoomInfo r   ON a.roomID     = r.roomID
+      JOIN SuiteInfo s  ON r.suiteID    = s.suiteID
+      JOIN Property p   ON s.propertyID = p.propertyID
+      JOIN Subleasor sub ON r.subleasorID = sub.subleasorID
+      JOIN Tenant t     ON a.tenantID   = t.tenantID
+      JOIN Account acc  ON t.accountID  = acc.accountID
+      WHERE sub.accountID = ?
+      ORDER BY a.appliedAt DESC
+    `;
+    return await query(sql, [accountID]) as any[];
+  },
+
+  getOwnershipInfo: async (applicationID: number) => {
+    const sql = `
+      SELECT
+        a.applicationID, a.status,
+        t.accountID  AS tenantAccountID,
+        sub.accountID AS subleasorAccountID
+      FROM Application a
+      JOIN Tenant t     ON a.tenantID   = t.tenantID
+      JOIN RoomInfo r   ON a.roomID     = r.roomID
+      JOIN Subleasor sub ON r.subleasorID = sub.subleasorID
+      WHERE a.applicationID = ?
+    `;
+    const rows = await query(sql, [applicationID]) as any[];
+    return rows[0] || null;
   },
 };
 
