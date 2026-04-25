@@ -1,19 +1,88 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Building, Calendar, MapPin, Edit, LogOut } from 'lucide-react';
+import { Calendar, Edit, LogOut } from 'lucide-react';
 import Link from 'next/link';
 
+interface ApplicationRow {
+  applicationID: number;
+  roomID: number;
+  status: 'pending' | 'accepted' | 'rejected';
+  appliedAt: string;
+  monthlyRent: number;
+  propertyName: string;
+  address: string;
+  city: string;
+  state: string;
+}
+
+interface ContractRow {
+  contractID: number;
+  roomID: number;
+  leaseStart: string;
+  leaseEnd: string;
+  monthlyRent: number;
+  signedAt: string;
+  propertyName: string;
+  address: string;
+  city: string;
+  state: string;
+}
+
 export default function ProfilePage() {
-  const { user, logout, isAuthenticated, loading } = useAuth();
+  const { user, token, logout, isAuthenticated, loading } = useAuth();
+  const [tenantID, setTenantID] = useState<number | null>(null);
+  const [applications, setApplications] = useState<ApplicationRow[]>([]);
+  const [contracts, setContracts] = useState<ContractRow[]>([]);
+  const [dataLoading, setDataLoading] = useState(false);
 
   const handleLogout = () => {
     logout();
     window.location.href = '/';
+  };
+
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      loadProfileData();
+    }
+  }, [isAuthenticated, user]);
+
+  const loadProfileData = async () => {
+    if (!user) return;
+    setDataLoading(true);
+    try {
+      // Look up the user's Tenant record by accountID
+      const tenantRes = await fetch(`/api/tenants?accountID=${user.accountID}`);
+      if (tenantRes.ok) {
+        const tenants = await tenantRes.json();
+        if (tenants.length > 0) {
+          const tid = tenants[0].tenantID;
+          setTenantID(tid);
+
+          // Fetch applications and contracts in parallel
+          const [appRes, contractRes] = await Promise.all([
+            fetch(`/api/applications?tenantID=${tid}`, {
+              headers: { Authorization: `Bearer ${token}` },
+            }),
+            fetch(`/api/contracts?tenantID=${tid}`, {
+              headers: { Authorization: `Bearer ${token}` },
+            }),
+          ]);
+
+          if (appRes.ok) setApplications(await appRes.json());
+          if (contractRes.ok) setContracts(await contractRes.json());
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load profile data:', err);
+    } finally {
+      setDataLoading(false);
+    }
   };
 
   if (loading) {
@@ -41,7 +110,7 @@ export default function ProfilePage() {
 
   const initials = user.name
     .split(' ')
-    .map(n => n[0])
+    .map((n: string) => n[0])
     .join('')
     .toUpperCase();
 
@@ -54,14 +123,18 @@ export default function ProfilePage() {
     });
   };
 
+  const statusVariant = (status: string) => {
+    if (status === 'accepted') return 'default';
+    if (status === 'rejected') return 'destructive';
+    return 'secondary';
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Profile</h1>
-          <p className="text-gray-600">
-            Manage your account and listings.
-          </p>
+          <p className="text-gray-600">Manage your account and listings.</p>
         </div>
 
         <Card className="mb-8">
@@ -95,14 +168,12 @@ export default function ProfilePage() {
                 <p className="text-gray-600">{user.bio}</p>
               </div>
             )}
-
             {user.dateOfBirth && (
               <div className="flex items-center text-gray-600">
                 <Calendar className="w-5 h-5 mr-3 text-gray-400" />
                 <span>Born: {formatDate(user.dateOfBirth)}</span>
               </div>
             )}
-
             {user.phoneNumber && (
               <div className="flex items-center text-gray-600">
                 <span className="w-5 h-5 mr-3 text-gray-400 flex items-center justify-center">📞</span>
@@ -128,18 +199,68 @@ export default function ProfilePage() {
           <div>
             <h2 className="text-xl font-semibold text-gray-900 mb-4">My Applications</h2>
             <Card>
-              <CardContent className="py-8 text-center text-gray-500">
-                <p>No applications yet.</p>
-              </CardContent>
+              {dataLoading ? (
+                <CardContent className="py-8 text-center text-gray-400">Loading...</CardContent>
+              ) : applications.length === 0 ? (
+                <CardContent className="py-8 text-center text-gray-500">
+                  <p className="mb-4">No applications yet.</p>
+                  <Link href="/find-subleases">
+                    <Button variant="outline">Browse Rooms</Button>
+                  </Link>
+                </CardContent>
+              ) : (
+                <CardContent className="p-0 divide-y">
+                  {applications.map((app) => (
+                    <div key={app.applicationID} className="flex items-center justify-between px-6 py-4">
+                      <div>
+                        <Link href={`/sublease/${app.roomID}`} className="font-medium text-blue-600 hover:underline">
+                          {app.propertyName}
+                        </Link>
+                        <p className="text-sm text-gray-500">
+                          {app.address}, {app.city}, {app.state}
+                        </p>
+                        <p className="text-sm text-gray-500">
+                          ${app.monthlyRent}/mo · Applied {formatDate(app.appliedAt)}
+                        </p>
+                      </div>
+                      <Badge variant={statusVariant(app.status)}>{app.status}</Badge>
+                    </div>
+                  ))}
+                </CardContent>
+              )}
             </Card>
           </div>
 
           <div>
             <h2 className="text-xl font-semibold text-gray-900 mb-4">My Contracts</h2>
             <Card>
-              <CardContent className="py-8 text-center text-gray-500">
-                <p>No contracts yet.</p>
-              </CardContent>
+              {dataLoading ? (
+                <CardContent className="py-8 text-center text-gray-400">Loading...</CardContent>
+              ) : contracts.length === 0 ? (
+                <CardContent className="py-8 text-center text-gray-500">
+                  <p>No contracts yet.</p>
+                </CardContent>
+              ) : (
+                <CardContent className="p-0 divide-y">
+                  {contracts.map((contract) => (
+                    <div key={contract.contractID} className="px-6 py-4">
+                      <Link href={`/sublease/${contract.roomID}`} className="font-medium text-blue-600 hover:underline">
+                        {contract.propertyName}
+                      </Link>
+                      <p className="text-sm text-gray-500">
+                        {contract.address}, {contract.city}, {contract.state}
+                      </p>
+                      <p className="text-sm text-gray-500">
+                        ${contract.monthlyRent}/mo
+                      </p>
+                      <p className="text-sm text-gray-500">
+                        Lease: {formatDate(contract.leaseStart)} – {formatDate(contract.leaseEnd)}
+                      </p>
+                      <p className="text-sm text-gray-400">Signed {formatDate(contract.signedAt)}</p>
+                    </div>
+                  ))}
+                </CardContent>
+              )}
             </Card>
           </div>
         </div>

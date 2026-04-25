@@ -7,7 +7,7 @@ import { Users, HomeIcon, Plus, ArrowRight } from 'lucide-react';
 
 export default function Home() {
   return (
-    <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
+    <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="text-center mb-12">
           <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">
@@ -36,8 +36,8 @@ export default function Home() {
           <Link href="/find-subleases">
             <Card className="hover:shadow-lg transition-shadow cursor-pointer h-full">
               <CardContent className="p-6 flex flex-col items-center text-center">
-                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
-                  <HomeIcon className="w-8 h-8 text-green-600" />
+                <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-4">
+                  <HomeIcon className="w-8 h-8 text-blue-600" />
                 </div>
                 <h3 className="text-xl font-semibold mb-2">Find Subleases</h3>
                 <p className="text-gray-600">
@@ -50,8 +50,8 @@ export default function Home() {
           <Link href="/create-listing">
             <Card className="hover:shadow-lg transition-shadow cursor-pointer h-full">
               <CardContent className="p-6 flex flex-col items-center text-center">
-                <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mb-4">
-                  <Plus className="w-8 h-8 text-purple-600" />
+                <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-4">
+                  <Plus className="w-8 h-8 text-blue-600" />
                 </div>
                 <h3 className="text-xl font-semibold mb-2">Create Listing</h3>
                 <p className="text-gray-600">
@@ -68,7 +68,7 @@ export default function Home() {
           </h2>
           <div className="grid md:grid-cols-3 gap-8">
             <div className="text-center">
-              <div className="w-12 h-12 bg-blue-600 text-white rounded-full flex items-center justify-center mx-auto mb-4 text-xl font-bold">
+              <div className="w-10 h-10 bg-gray-400 text-white rounded-full flex items-center justify-center mx-auto mb-4 text-xl font-bold">
                 1
               </div>
               <h3 className="font-semibold mb-2">Create Your Profile</h3>
@@ -77,7 +77,7 @@ export default function Home() {
               </p>
             </div>
             <div className="text-center">
-              <div className="w-12 h-12 bg-blue-600 text-white rounded-full flex items-center justify-center mx-auto mb-4 text-xl font-bold">
+              <div className="w-10 h-10 bg-gray-400 text-white rounded-full flex items-center justify-center mx-auto mb-4 text-xl font-bold">
                 2
               </div>
               <h3 className="font-semibold mb-2">Browse & Search</h3>
@@ -86,7 +86,7 @@ export default function Home() {
               </p>
             </div>
             <div className="text-center">
-              <div className="w-12 h-12 bg-blue-600 text-white rounded-full flex items-center justify-center mx-auto mb-4 text-xl font-bold">
+              <div className="w-10 h-10 bg-gray-400 text-white rounded-full flex items-center justify-center mx-auto mb-4 text-xl font-bold">
                 3
               </div>
               <h3 className="font-semibold mb-2">Connect & Book</h3>
@@ -95,15 +95,6 @@ export default function Home() {
               </p>
             </div>
           </div>
-        </div>
-
-        <div className="text-center mt-12">
-          <Link href="/find-subleases">
-            <Button size="lg" className="gap-2">
-              Get Started
-              <ArrowRight className="w-5 h-5" />
-            </Button>
-          </Link>
         </div>
       </div>
     </div>

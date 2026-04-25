@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { roomApi } from '@/lib/api';
+import { getUserIdFromRequest } from '@/lib/api-auth';
 
 export async function GET(request: NextRequest) {
   try {
@@ -39,9 +40,13 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const userId = getUserIdFromRequest(request);
+  if (!userId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
   try {
     const body = await request.json();
-    const room = await roomApi.create(body, body.subleasorAccountID || 1);
+    const room = await roomApi.create(body, userId);
     return NextResponse.json(room, { status: 201 });
   } catch (error) {
     console.error('Error creating room:', error);

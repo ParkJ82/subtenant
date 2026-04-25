@@ -4,6 +4,14 @@ import { tenantApi } from '@/lib/api';
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
+    const accountID = searchParams.get('accountID');
+
+    // Look up tenant by accountID (used by profile/apply flows)
+    if (accountID) {
+      const tenant = await tenantApi.getByAccountId(parseInt(accountID));
+      return NextResponse.json(tenant ? [tenant] : []);
+    }
+
     const location = searchParams.get('location') || undefined;
     const companyName = searchParams.get('companyName') || undefined;
     const availableFrom = searchParams.get('availableFrom') || undefined;

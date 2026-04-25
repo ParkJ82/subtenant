@@ -1,4 +1,5 @@
 import { query } from '../db';
+import { hashPassword } from '../security';
 import {
   Tenant,
   Subleasor,
@@ -126,12 +127,43 @@ export const tenantApi = {
     };
   },
 
+  getByAccountId: async (accountID: number): Promise<TenantWithAccount | null> => {
+    const sql = `
+      SELECT t.*, a.name, a.email, a.bio, a.dateOfBirth, a.phoneNumber
+      FROM Tenant t
+      JOIN Account a ON t.accountID = a.accountID
+      WHERE t.accountID = ?
+    `;
+    const result = await query(sql, [accountID]) as any[];
+    if (!result[0]) return null;
+    const row = result[0];
+    return {
+      tenantID: row.tenantID,
+      accountID: row.accountID,
+      isListed: row.isListed,
+      companyName: row.companyName,
+      availableFrom: row.availableFrom,
+      availableTo: row.availableTo,
+      account: {
+        accountID: row.accountID,
+        name: row.name,
+        email: row.email,
+        bio: row.bio,
+        dateOfBirth: row.dateOfBirth,
+        phoneNumber: row.phoneNumber,
+        password: '',
+      },
+    };
+  },
+
   create: async (data: TenantFormData): Promise<Tenant> => {
+    // Hash password before storing
+    const hashedPassword = await hashPassword(data.password);
     // First create account
     const accountResult = await accountApi.create({
       name: data.name,
       email: data.email,
-      password: data.password,
+      password: hashedPassword,
       bio: data.bio,
       dateOfBirth: data.dateOfBirth,
       phoneNumber: data.phoneNumber,
@@ -443,8 +475,8 @@ export const roomApi = {
 
     // Create room
     const roomSql = `
-      INSERT INTO RoomInfo (suiteID, subleasorID, monthlyRent, availableFrom, availableTo, description)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO RoomInfo (suiteID, subleasorID, isListed, createdAt, monthlyRent, availableFrom, availableTo, description)
+      VALUES (?, ?, TRUE, NOW(), ?, ?, ?, ?)
     `;
     const roomResult = await query(roomSql, [
       suiteID,
@@ -532,8 +564,8 @@ export const amenityApi = {
 export const applicationApi = {
   create: async (tenantID: number, roomID: number, message?: string): Promise<Application> => {
     const sql = `
-      INSERT INTO Application (tenantID, roomID, status, message)
-      VALUES (?, ?, 'pending', ?)
+      INSERT INTO Application (tenantID, roomID, status, message, appliedAt)
+      VALUES (?, ?, 'pending', ?, NOW())
     `;
     const result = await query(sql, [tenantID, roomID, message || null]);
     return {
@@ -563,18 +595,33 @@ export const applicationApi = {
     await query(sql, [status, applicationID]);
     return true;
   },
+
+  getByTenantIdWithDetails: async (tenantID: number) => {
+    const sql = `
+      SELECT
+        a.applicationID, a.tenantID, a.roomID, a.status, a.message, a.appliedAt,
+        r.monthlyRent, r.availableFrom, r.availableTo,
+        p.propertyName, p.address, p.city, p.state
+      FROM Application a
+      JOIN RoomInfo r ON a.roomID = r.roomID
+      JOIN SuiteInfo s ON r.suiteID = s.suiteID
+      JOIN Property p ON s.propertyID = p.propertyID
+      WHERE a.tenantID = ?
+      ORDER BY a.appliedAt DESC
+    `;
+    return await query(sql, [tenantID]) as any[];
+  },
 };
 
 // Contract API
 export const contractApi = {
   create: async (applicationID: number, leaseStart: Date, leaseEnd: Date, monthlyRent: number): Promise<Contract> => {
-    // Get application details
     const appResult = await query('SELECT * FROM Application WHERE applicationID = ?', [applicationID]) as any[];
     const app = appResult[0];
 
     const sql = `
-      INSERT INTO Contract (applicationID, tenantID, roomID, leaseStart, leaseEnd, monthlyRent)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO Contract (applicationID, tenantID, roomID, leaseStart, leaseEnd, monthlyRent, signedAt)
+      VALUES (?, ?, ?, ?, ?, ?, NOW())
     `;
     const result = await query(sql, [
       applicationID,
@@ -597,9 +644,60 @@ export const contractApi = {
     };
   },
 
+  createFromApplication: async (applicationID: number): Promise<Contract> => {
+    const appResult = await query(`
+      SELECT a.*, r.availableFrom, r.availableTo, r.monthlyRent
+      FROM Application a
+      JOIN RoomInfo r ON a.roomID = r.roomID
+      WHERE a.applicationID = ?
+    `, [applicationID]) as any[];
+    const app = appResult[0];
+    if (!app) throw new Error('Application not found');
+
+    const sql = `
+      INSERT INTO Contract (applicationID, tenantID, roomID, leaseStart, leaseEnd, monthlyRent, signedAt)
+      VALUES (?, ?, ?, ?, ?, ?, NOW())
+    `;
+    const result = await query(sql, [
+      applicationID,
+      app.tenantID,
+      app.roomID,
+      app.availableFrom || new Date(),
+      app.availableTo || new Date(),
+      app.monthlyRent,
+    ]);
+
+    return {
+      contractID: (result as any).insertId,
+      applicationID,
+      tenantID: app.tenantID,
+      roomID: app.roomID,
+      leaseStart: app.availableFrom || new Date(),
+      leaseEnd: app.availableTo || new Date(),
+      monthlyRent: app.monthlyRent,
+      signedAt: new Date(),
+    };
+  },
+
   getByTenantId: async (tenantID: number): Promise<Contract[]> => {
     const sql = 'SELECT * FROM Contract WHERE tenantID = ?';
     const result = await query(sql, [tenantID]) as any[];
     return result;
+  },
+
+  getByTenantIdWithDetails: async (tenantID: number) => {
+    const sql = `
+      SELECT
+        c.contractID, c.applicationID, c.tenantID, c.roomID,
+        c.leaseStart, c.leaseEnd, c.monthlyRent, c.signedAt,
+        p.propertyName, p.address, p.city, p.state
+      FROM Contract c
+      JOIN RoomInfo r ON c.roomID = r.roomID
+      JOIN SuiteInfo s ON r.suiteID = s.suiteID
+      JOIN Property p ON s.propertyID = p.propertyID
+      WHERE c.tenantID = ?
+      ORDER BY c.signedAt DESC
+    `;
+    return await query(sql, [tenantID]) as any[];
   },
 };
