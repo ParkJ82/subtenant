@@ -1,9 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { roomApi } from '@/lib/api';
+import { getUserIdFromRequest } from '@/lib/api-auth';
 
 export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
+
+    // Return the single room owned by this account (for profile "My Listing")
+    const subleasorAccountID = searchParams.get('subleasorAccountID');
+    if (subleasorAccountID) {
+      const room = await roomApi.getByAccountId(parseInt(subleasorAccountID));
+      return NextResponse.json(room ?? null);
+    }
+
     const location = searchParams.get('location') || undefined;
     const minPrice = searchParams.get('minPrice')
       ? parseFloat(searchParams.get('minPrice')!)
@@ -39,11 +48,21 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const userId = getUserIdFromRequest(request);
+  if (!userId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
   try {
     const body = await request.json();
-    const room = await roomApi.create(body, body.subleasorAccountID || 1);
+    const room = await roomApi.create(body, userId);
     return NextResponse.json(room, { status: 201 });
-  } catch (error) {
+  } catch (error: any) {
+    if (error?.message === 'DUPLICATE_LISTING') {
+      return NextResponse.json(
+        { error: 'You already have a room listing. Each subleasor can only have one listing.' },
+        { status: 409 }
+      );
+    }
     console.error('Error creating room:', error);
     return NextResponse.json(
       { error: 'Failed to create room' },

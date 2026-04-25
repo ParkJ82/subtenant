@@ -4,7 +4,7 @@ import { verifyToken } from '@/lib/security';
 export function middleware(request: NextRequest) {
   const token = request.headers.get('authorization')?.replace('Bearer ', '');
 
-  // Public routes that don't require authentication
+  // Routes fully open to unauthenticated requests (read-only browsing)
   const publicPaths = [
     '/',
     '/login',
@@ -13,18 +13,25 @@ export function middleware(request: NextRequest) {
     '/find-subleases',
     '/api/auth/login',
     '/api/auth/register',
-    '/api/tenants',
-    '/api/rooms',
     '/api/amenities',
   ];
 
+  // These API paths allow GET without auth; mutating methods require a token
+  // (the route handlers themselves reject unauthenticated mutations)
+  const publicGetPaths = ['/api/tenants', '/api/rooms'];
+
+  const pathname = request.nextUrl.pathname;
+  const method = request.method;
+
   const isPublicPath = publicPaths.some(path =>
-    request.nextUrl.pathname.startsWith(path) ||
-    request.nextUrl.pathname === path
+    pathname.startsWith(path) || pathname === path
   );
 
-  // Allow public paths
-  if (isPublicPath) {
+  const isPublicGet =
+    method === 'GET' &&
+    publicGetPaths.some(path => pathname.startsWith(path));
+
+  if (isPublicPath || isPublicGet) {
     return NextResponse.next();
   }
 

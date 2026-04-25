@@ -7,15 +7,20 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { MapPin, Calendar, Mail, ArrowLeft, Loader2, ChevronDown, ChevronUp, Building, Home } from 'lucide-react';
+import { useAuth } from '@/lib/auth-context';
 
 export default function SubleaseInfoPage() {
   const params = useParams();
   const router = useRouter();
+  const { isAuthenticated, token } = useAuth();
   const [room, setRoom] = useState<RoomWithDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showFullDescription, setShowFullDescription] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [applying, setApplying] = useState(false);
+  const [applied, setApplied] = useState(false);
+  const [applyError, setApplyError] = useState<string | null>(null);
 
   useEffect(() => {
     loadData();
@@ -43,9 +48,35 @@ export default function SubleaseInfoPage() {
     }
   };
 
-  const handleApply = () => {
-    if (room) {
-      window.location.href = `mailto:${room.subleasor.account.email}?subject=SubTenants - Application for ${room.suite.property.propertyName}&body=Hi ${room.subleasor.account.name},%0D%0A%0D%0AI'm interested in applying for your room at ${room.suite.property.address}.%0D%0A%0D%0APlease let me know if you'd like to schedule a viewing or discuss further.%0D%0A%0D%0AThank you!`;
+  const handleApply = async () => {
+    if (!isAuthenticated) {
+      router.push('/login');
+      return;
+    }
+    if (!room) return;
+
+    setApplying(true);
+    setApplyError(null);
+    try {
+      const response = await fetch('/api/applications', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({ roomID: room.roomID }),
+      });
+
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || 'Failed to submit application');
+      }
+
+      setApplied(true);
+    } catch (err: any) {
+      setApplyError(err.message);
+    } finally {
+      setApplying(false);
     }
   };
 
@@ -277,13 +308,31 @@ export default function SubleaseInfoPage() {
                 <Badge variant="secondary">{room.subleasor.account.name}</Badge>
               </div>
 
+              {applyError && (
+                <p className="text-sm text-red-600 bg-red-50 p-3 rounded">{applyError}</p>
+              )}
+              {applied && (
+                <p className="text-sm text-green-700 bg-green-50 p-3 rounded">
+                  Application submitted! The subleasor will be in touch.
+                </p>
+              )}
+
               <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t">
                 <Button onClick={handleContact} variant="outline" className="flex-1">
                   <Mail className="w-4 h-4 mr-2" />
                   Contact Subleasor
                 </Button>
-                <Button onClick={handleApply} className="flex-1">
-                  Apply for Room
+                <Button onClick={handleApply} className="flex-1" disabled={applying || applied}>
+                  {applying ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Submitting...
+                    </>
+                  ) : applied ? (
+                    'Applied!'
+                  ) : (
+                    'Apply for Room'
+                  )}
                 </Button>
               </div>
             </CardContent>
