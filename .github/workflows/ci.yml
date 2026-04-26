@@ -19,7 +19,8 @@ env:
   DB_PASSWORD: ci
   DB_NAME: ci
   JWT_SECRET: ci-jwt-secret-for-github-actions
-  NODE_ENV: production
+  # Do not set NODE_ENV=production here: npm ci would skip devDependencies and the
+  # build needs @tailwindcss/postcss, tailwindcss, typescript, etc.
 
 jobs:
   build:
@@ -39,3 +40,5 @@ jobs:
 
       - name: Build
         run: npm run build
+        env:
+          NODE_ENV: production
