@@ -734,7 +734,7 @@ export const applicationApi = {
     const sql = `
       SELECT
         a.applicationID, a.tenantID, a.roomID, a.status, a.message, a.appliedAt,
-        r.monthlyRent,
+        r.monthlyRent, r.availableFrom, r.availableTo,
         p.propertyName, p.address, p.city, p.state,
         acc.name  AS applicantName,
         acc.email AS applicantEmail

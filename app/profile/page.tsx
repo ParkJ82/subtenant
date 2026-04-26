@@ -27,6 +27,8 @@ interface SentApplication {
   message: string | null;
   appliedAt: string;
   monthlyRent: number;
+  availableFrom: string | null;
+  availableTo: string | null;
   propertyName: string;
   address: string;
   city: string;
@@ -41,6 +43,8 @@ interface ReceivedApplication {
   message: string | null;
   appliedAt: string;
   monthlyRent: number;
+  availableFrom: string | null;
+  availableTo: string | null;
   propertyName: string;
   address: string;
   city: string;
@@ -743,6 +747,11 @@ export default function ProfilePage() {
                           <p className="text-sm text-gray-500">
                             ${app.monthlyRent}/mo · Applied {formatDate(app.appliedAt)}
                           </p>
+                          {(app.availableFrom || app.availableTo) && (
+                            <p className="text-sm text-gray-500">
+                              Lease Period: {formatDate(app.availableFrom)} – {formatDate(app.availableTo)}
+                            </p>
+                          )}
                           {app.message && (
                             <p className="text-sm text-gray-600 mt-1 italic">
                               &ldquo;{app.message}&rdquo;
@@ -806,6 +815,11 @@ export default function ProfilePage() {
                           <p className="text-sm text-gray-500">
                             Applied {formatDate(app.appliedAt)}
                           </p>
+                          {(app.availableFrom || app.availableTo) && (
+                            <p className="text-sm text-gray-500">
+                              Lease Period: {formatDate(app.availableFrom)} – {formatDate(app.availableTo)}
+                            </p>
+                          )}
                           {app.message && (
                             <p className="text-sm text-gray-600 mt-1 italic">
                               &ldquo;{app.message}&rdquo;
