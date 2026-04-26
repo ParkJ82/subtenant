@@ -73,11 +73,11 @@ export default function CreateListingPage() {
     availableTo: '',
     roomDescription: '',
     amenityIDs: [],
-    photoUrls: [],
+    videoUrls: [],
   });
 
   const [selectedAmenities, setSelectedAmenities] = useState<number[]>([]);
-  const [photoUrls, setPhotoUrls] = useState<string[]>(['']);
+  const [videoUrls, setVideoUrls] = useState<string[]>(['']);
 
   useEffect(() => {
     loadAmenities();
@@ -223,7 +223,7 @@ export default function CreateListingPage() {
         body: JSON.stringify({
           ...roomForm,
           amenityIDs: selectedAmenities,
-          photoUrls: photoUrls.filter(url => url.trim() !== ''),
+          videoUrls: videoUrls.filter(url => url.trim() !== ''),
         }),
       });
 
@@ -252,18 +252,18 @@ export default function CreateListingPage() {
     );
   };
 
-  const addPhotoUrl = () => {
-    setPhotoUrls([...photoUrls, '']);
+  const addVideoUrl = () => {
+    setVideoUrls([...videoUrls, '']);
   };
 
-  const updatePhotoUrl = (index: number, value: string) => {
-    const newUrls = [...photoUrls];
+  const updateVideoUrl = (index: number, value: string) => {
+    const newUrls = [...videoUrls];
     newUrls[index] = value;
-    setPhotoUrls(newUrls);
+    setVideoUrls(newUrls);
   };
 
-  const removePhotoUrl = (index: number) => {
-    setPhotoUrls(photoUrls.filter((_, i) => i !== index));
+  const removeVideoUrl = (index: number) => {
+    setVideoUrls(videoUrls.filter((_, i) => i !== index));
   };
 
   if (success) {
@@ -731,20 +731,20 @@ export default function CreateListingPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label>Photo URLs</Label>
-                    {photoUrls.map((url, index) => (
+                    <Label>YouTube Video URLs</Label>
+                    {videoUrls.map((url, index) => (
                       <div key={index} className="flex gap-2">
                         <Input
                           value={url}
-                          onChange={(e) => updatePhotoUrl(index, e.target.value)}
-                          placeholder="https://example.com/photo.jpg"
+                          onChange={(e) => updateVideoUrl(index, e.target.value)}
+                          placeholder="https://www.youtube.com/watch?v=..."
                         />
-                        {photoUrls.length > 1 && (
+                        {videoUrls.length > 1 && (
                           <Button
                             type="button"
                             variant="outline"
                             size="icon"
-                            onClick={() => removePhotoUrl(index)}
+                            onClick={() => removeVideoUrl(index)}
                           >
                             ×
                           </Button>
@@ -755,9 +755,9 @@ export default function CreateListingPage() {
                       type="button"
                       variant="outline"
                       size="sm"
-                      onClick={addPhotoUrl}
+                      onClick={addVideoUrl}
                     >
-                      Add Photo URL
+                      Add Video URL
                     </Button>
                   </div>
 

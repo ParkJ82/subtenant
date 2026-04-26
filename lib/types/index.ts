@@ -67,10 +67,10 @@ export interface RoomAmenity {
   amenityID: number;
 }
 
-export interface ListingPhoto {
-  photoID: number;
+export interface ListingVideo {
+  videoID: number;
   roomID: number;
-  photoUrl: string;
+  videoUrl: string;
 }
 
 export interface Application {
@@ -101,7 +101,7 @@ export interface TenantWithAccount extends Tenant {
 export interface RoomWithDetails extends RoomInfo {
   suite: SuiteInfo & { property: Property };
   subleasor: Subleasor & { account: Account };
-  photos: ListingPhoto[];
+  videos: ListingVideo[];
   amenities: Amenity[];
 }
 
@@ -117,7 +117,7 @@ export interface RoomListItem {
   propertyName: string;
   subleasorName: string;
   subleasorEmail: string;
-  photos: ListingPhoto[];
+  videos: ListingVideo[];
   amenities: Amenity[];
 }
 
@@ -152,7 +152,7 @@ export interface RoomFormData {
   availableTo?: string;
   roomDescription?: string;
   amenityIDs?: number[];
-  photoUrls?: string[];
+  videoUrls?: string[];
 }
 
 // Search filters

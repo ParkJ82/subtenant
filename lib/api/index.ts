@@ -315,10 +315,10 @@ export const roomApi = {
 
     const result = await query(sql, params) as any[];
 
-    // Get photos and amenities for each room
+    // Get videos and amenities for each room
     const rooms = await Promise.all(result.map(async (row) => {
-      const photos = await query(
-        'SELECT * FROM ListingPhoto WHERE roomID = ?',
+      const videos = await query(
+        'SELECT * FROM ListingVideo WHERE roomID = ?',
         [row.roomID]
       ) as any[];
 
@@ -340,7 +340,7 @@ export const roomApi = {
         propertyName: row.propertyName,
         subleasorName: row.subleasorName,
         subleasorEmail: row.subleasorEmail,
-        photos,
+        videos,
         amenities,
       };
     }));
@@ -382,8 +382,8 @@ export const roomApi = {
 
     const row = result[0];
 
-    const photos = await query(
-      'SELECT * FROM ListingPhoto WHERE roomID = ?',
+    const videos = await query(
+      'SELECT * FROM ListingVideo WHERE roomID = ?',
       [roomID]
     ) as any[];
 
@@ -435,7 +435,7 @@ export const roomApi = {
           password: '',
         },
       },
-      photos,
+      videos,
       amenities,
     };
   },
@@ -474,8 +474,8 @@ export const roomApi = {
 
     const row = result[0];
 
-    const photos = await query(
-      'SELECT * FROM ListingPhoto WHERE roomID = ?',
+    const videos = await query(
+      'SELECT * FROM ListingVideo WHERE roomID = ?',
       [row.roomID]
     ) as any[];
 
@@ -527,7 +527,7 @@ export const roomApi = {
           password: '',
         },
       },
-      photos,
+      videos,
       amenities,
     };
   },
@@ -602,10 +602,10 @@ export const roomApi = {
       }
     }
 
-    // Add photos
-    if (data.photoUrls && data.photoUrls.length > 0) {
-      for (const photoUrl of data.photoUrls) {
-        await query('INSERT INTO ListingPhoto (roomID, photoUrl) VALUES (?, ?)', [roomID, photoUrl]);
+    // Add videos
+    if (data.videoUrls && data.videoUrls.length > 0) {
+      for (const videoUrl of data.videoUrls) {
+        await query('INSERT INTO ListingVideo (roomID, videoUrl) VALUES (?, ?)', [roomID, videoUrl]);
       }
     }
 
@@ -755,11 +755,13 @@ export const applicationApi = {
     const sql = `
       SELECT
         a.applicationID, a.status,
-        t.accountID  AS tenantAccountID,
+        a.tenantID,
+        a.roomID,
+        t.accountID   AS tenantAccountID,
         sub.accountID AS subleasorAccountID
       FROM Application a
-      JOIN Tenant t     ON a.tenantID   = t.tenantID
-      JOIN RoomInfo r   ON a.roomID     = r.roomID
+      JOIN Tenant t      ON a.tenantID    = t.tenantID
+      JOIN RoomInfo r    ON a.roomID      = r.roomID
       JOIN Subleasor sub ON r.subleasorID = sub.subleasorID
       WHERE a.applicationID = ?
     `;
