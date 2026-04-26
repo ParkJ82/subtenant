@@ -60,6 +60,13 @@ interface ContractRow {
   address: string;
   city: string;
   state: string;
+  role: 'tenant' | 'subleasor';
+  tenantName: string;
+  tenantEmail: string;
+  tenantPhone: string | null;
+  subleasorName: string;
+  subleasorEmail: string;
+  subleasorPhone: string | null;
 }
 
 interface EditForm {
@@ -83,6 +90,8 @@ export default function ProfilePage() {
   const [contracts, setContracts] = useState<ContractRow[]>([]);
   const [dataLoading, setDataLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState<number | null>(null);
+  const [roomActionLoading, setRoomActionLoading] = useState(false);
+  const [listingFilled, setListingFilled] = useState(false);
 
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -115,11 +124,12 @@ export default function ProfilePage() {
     if (!user) return;
     setDataLoading(true);
     try {
-      const [tenantRes, roomRes, sentRes, receivedRes] = await Promise.all([
+      const [tenantRes, roomRes, sentRes, receivedRes, contractRes] = await Promise.all([
         fetch(`/api/tenants?accountID=${user.accountID}`),
         fetch(`/api/rooms?subleasorAccountID=${user.accountID}`),
         fetch('/api/applications?type=sent', { headers: authHeaders }),
         fetch('/api/applications?type=received', { headers: authHeaders }),
+        fetch('/api/contracts', { headers: authHeaders }),
       ]);
 
       if (roomRes.ok) setMyRoom(await roomRes.json());
@@ -127,6 +137,7 @@ export default function ProfilePage() {
 
       if (sentRes.ok) setSentApps(await sentRes.json());
       if (receivedRes.ok) setReceivedApps(await receivedRes.json());
+      if (contractRes.ok) setContracts(await contractRes.json());
 
       if (tenantRes.ok) {
         const tenants = await tenantRes.json();
@@ -139,11 +150,6 @@ export default function ProfilePage() {
             availableTo: t.availableTo,
             isListed: !!t.isListed,
           });
-
-          const contractRes = await fetch(`/api/contracts?tenantID=${t.tenantID}`, {
-            headers: authHeaders,
-          });
-          if (contractRes.ok) setContracts(await contractRes.json());
         }
       }
     } catch (err) {
@@ -190,7 +196,6 @@ export default function ProfilePage() {
       setReceivedApps((prev) =>
         prev.map((a) => (a.applicationID === applicationID ? { ...a, status } : a))
       );
-      // Refresh the listing card — accepting an app sets isListed = FALSE via DB trigger
       if (status === 'accepted' && user) {
         const roomRes = await fetch(`/api/rooms?subleasorAccountID=${user.accountID}`);
         if (roomRes.ok) setMyRoom(await roomRes.json());
@@ -202,12 +207,58 @@ export default function ProfilePage() {
     }
   };
 
+  const handleToggleListed = async () => {
+    if (!myRoom || !token) return;
+    setRoomActionLoading(true);
+    try {
+      const newIsListed = !myRoom.isListed;
+      const res = await fetch(`/api/rooms/${myRoom.roomID}`, {
+        method: 'PATCH',
+        headers: { ...authHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ isListed: newIsListed }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        if (res.status === 403 && err.error?.includes('accepted application')) {
+          setListingFilled(true);
+          return;
+        }
+        throw new Error(err.error || 'Failed to update listing');
+      }
+      setMyRoom({ ...myRoom, isListed: newIsListed });
+    } catch (err: any) {
+      alert(err.message || 'Failed to update listing');
+    } finally {
+      setRoomActionLoading(false);
+    }
+  };
+
+  const handleDeleteListing = async () => {
+    if (!myRoom || !token) return;
+    if (!confirm('Are you sure you want to delete this listing? This cannot be undone.')) return;
+    setRoomActionLoading(true);
+    try {
+      const res = await fetch(`/api/rooms/${myRoom.roomID}`, {
+        method: 'DELETE',
+        headers: authHeaders,
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to delete listing');
+      }
+      setMyRoom(null);
+    } catch (err: any) {
+      alert(err.message || 'Failed to delete listing');
+    } finally {
+      setRoomActionLoading(false);
+    }
+  };
+
   const handleEditOpen = () => {
     if (!user) return;
     setEditForm({
       name: user.name ?? '',
       bio: user.bio ?? '',
-      // MySQL returns full ISO datetime strings; slice to yyyy-mm-dd for the date input
       dateOfBirth: user.dateOfBirth ? user.dateOfBirth.toString().slice(0, 10) : '',
       phoneNumber: user.phoneNumber ?? '',
       companyName: tenant?.companyName ?? '',
@@ -263,7 +314,6 @@ export default function ProfilePage() {
 
       const data = await res.json();
 
-      // Update the auth context so the name refreshes everywhere
       updateUser({
         accountID: data.account.accountID,
         name: data.account.name,
@@ -273,7 +323,6 @@ export default function ProfilePage() {
         phoneNumber: data.account.phoneNumber,
       });
 
-      // Update local tenant state
       if (data.tenant) {
         setTenant({
           tenantID: data.tenant.tenantID,
@@ -336,6 +385,14 @@ export default function ProfilePage() {
     return 'secondary';
   };
 
+  // True when any received application for the user's own listing is accepted.
+  // Derived from already-fetched data — no extra API call needed.
+  const roomHasAcceptedApp =
+    !!myRoom &&
+    receivedApps.some(
+      (a) => a.roomID === myRoom.roomID && a.status === 'accepted'
+    );
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -344,6 +401,7 @@ export default function ProfilePage() {
           <p className="text-gray-600">Manage your account and listings.</p>
         </div>
 
+        {/* Profile card */}
         <Card className="mb-8">
           <CardHeader>
             <div className="flex items-center space-x-4">
@@ -374,7 +432,6 @@ export default function ProfilePage() {
           <CardContent>
             {editing ? (
               <form onSubmit={handleEditSubmit} className="space-y-4">
-                {/* Account fields */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1">
                     <Label htmlFor="edit-name">Name</Label>
@@ -417,57 +474,54 @@ export default function ProfilePage() {
                   />
                 </div>
 
-                {/* Tenant fields — only shown when this user has a tenant profile */}
                 {tenant && (
-                  <>
-                    <div className="border-t pt-4">
-                      <p className="text-sm font-semibold text-gray-700 mb-3">Tenant Profile</p>
-                      <div className="space-y-4">
+                  <div className="border-t pt-4">
+                    <p className="text-sm font-semibold text-gray-700 mb-3">Tenant Profile</p>
+                    <div className="space-y-4">
+                      <div className="space-y-1">
+                        <Label htmlFor="edit-company">Company</Label>
+                        <Input
+                          id="edit-company"
+                          value={editForm.companyName}
+                          onChange={(e) => setEditForm({ ...editForm, companyName: e.target.value })}
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div className="space-y-1">
-                          <Label htmlFor="edit-company">Company / School</Label>
+                          <Label htmlFor="edit-avail-from">Available From</Label>
                           <Input
-                            id="edit-company"
-                            value={editForm.companyName}
-                            onChange={(e) => setEditForm({ ...editForm, companyName: e.target.value })}
+                            id="edit-avail-from"
+                            type="date"
+                            value={editForm.availableFrom}
+                            onChange={(e) => setEditForm({ ...editForm, availableFrom: e.target.value })}
                           />
                         </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          <div className="space-y-1">
-                            <Label htmlFor="edit-avail-from">Available From</Label>
-                            <Input
-                              id="edit-avail-from"
-                              type="date"
-                              value={editForm.availableFrom}
-                              onChange={(e) => setEditForm({ ...editForm, availableFrom: e.target.value })}
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <Label htmlFor="edit-avail-to">Available To</Label>
-                            <Input
-                              id="edit-avail-to"
-                              type="date"
-                              value={editForm.availableTo}
-                              onChange={(e) => setEditForm({ ...editForm, availableTo: e.target.value })}
-                            />
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-3">
-                          <input
-                            id="edit-listed"
-                            type="checkbox"
-                            className="w-4 h-4 rounded border-gray-300"
-                            checked={editForm.isListed}
-                            onChange={(e) => setEditForm({ ...editForm, isListed: e.target.checked })}
+                        <div className="space-y-1">
+                          <Label htmlFor="edit-avail-to">Available To</Label>
+                          <Input
+                            id="edit-avail-to"
+                            type="date"
+                            value={editForm.availableTo}
+                            onChange={(e) => setEditForm({ ...editForm, availableTo: e.target.value })}
                           />
-                          <Label htmlFor="edit-listed" className="cursor-pointer">
-                            Show my profile to subleasors (listed)
-                          </Label>
                         </div>
                       </div>
+
+                      <div className="flex items-center gap-3">
+                        <input
+                          id="edit-listed"
+                          type="checkbox"
+                          className="w-4 h-4 rounded border-gray-300"
+                          checked={editForm.isListed}
+                          onChange={(e) => setEditForm({ ...editForm, isListed: e.target.checked })}
+                        />
+                        <Label htmlFor="edit-listed" className="cursor-pointer">
+                          Show my profile to subleasors (listed)
+                        </Label>
+                      </div>
                     </div>
-                  </>
+                  </div>
                 )}
 
                 {saveError && (
@@ -504,20 +558,18 @@ export default function ProfilePage() {
                 )}
                 {user.dateOfBirth && (
                   <div className="flex items-center text-gray-600">
-                    {/* <Calendar className="w-5 h-5 mr-3 text-gray-400" /> */}
                     <span>Date of Birth: {formatDate(user.dateOfBirth)}</span>
                   </div>
                 )}
                 {user.phoneNumber && (
                   <div className="flex items-center text-gray-600">
-                    {/* <span className="w-5 h-5 mr-3 text-gray-400 flex items-center justify-center">📞</span> */}
                     <span>Phone: {user.phoneNumber}</span>
                   </div>
                 )}
                 {tenant && (
                   <div className="border-t pt-4 space-y-1 text-sm text-gray-600">
                     <p className="font-semibold text-gray-800">Tenant Profile</p>
-                    {tenant.companyName && <p>Company / School: {tenant.companyName}</p>}
+                    {tenant.companyName && <p>Company: {tenant.companyName}</p>}
                     {(tenant.availableFrom || tenant.availableTo) && (
                       <p>
                         Available: {formatDate(tenant.availableFrom)} – {formatDate(tenant.availableTo)}
@@ -536,8 +588,8 @@ export default function ProfilePage() {
           </CardContent>
         </Card>
 
-        {/* Applications & Contracts sections */}
         <div className="space-y-6">
+          {/* My Listing */}
           <div>
             <h2 className="text-xl font-semibold text-gray-900 mb-4">My Listing</h2>
             <Card>
@@ -590,10 +642,66 @@ export default function ProfilePage() {
                     )}
                   </div>
 
-                  <div className="pt-2">
+                  <div className="pt-2 flex flex-wrap gap-2 items-center">
                     <Link href={`/sublease/${myRoom.roomID}`}>
                       <Button variant="outline" size="sm">View Listing</Button>
                     </Link>
+
+                    {roomHasAcceptedApp ? (
+                      <p className="text-xs text-gray-500">
+                        This listing has an accepted application and cannot be modified or deleted.
+                      </p>
+                    ) : (
+                      <>
+                        {myRoom.isListed ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-amber-600 border-amber-300 hover:bg-amber-50"
+                            disabled={roomActionLoading}
+                            onClick={handleToggleListed}
+                          >
+                            {roomActionLoading ? (
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                            ) : (
+                              'Unlist'
+                            )}
+                          </Button>
+                        ) : listingFilled ? (
+                          <p className="text-xs text-gray-500">
+                            This listing has been filled and cannot be re-listed.
+                          </p>
+                        ) : (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="text-green-600 border-green-300 hover:bg-green-50"
+                            disabled={roomActionLoading}
+                            onClick={handleToggleListed}
+                          >
+                            {roomActionLoading ? (
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                            ) : (
+                              'Re-list'
+                            )}
+                          </Button>
+                        )}
+
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-red-600 border-red-300 hover:bg-red-50"
+                          disabled={roomActionLoading}
+                          onClick={handleDeleteListing}
+                        >
+                          {roomActionLoading ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : (
+                            'Delete Listing'
+                          )}
+                        </Button>
+                      </>
+                    )}
                   </div>
                 </CardContent>
               )}
@@ -735,6 +843,7 @@ export default function ProfilePage() {
             </Card>
           </div>
 
+          {/* My Contracts */}
           <div>
             <h2 className="text-xl font-semibold text-gray-900 mb-4">My Contracts</h2>
             <Card>
@@ -748,9 +857,23 @@ export default function ProfilePage() {
                 <CardContent className="p-0 divide-y">
                   {contracts.map((contract) => (
                     <div key={contract.contractID} className="px-6 py-4">
-                      <Link href={`/sublease/${contract.roomID}`} className="font-medium text-blue-600 hover:underline">
-                        {contract.propertyName}
-                      </Link>
+                      <div className="flex items-start justify-between gap-3 mb-1">
+                        <Link
+                          href={`/sublease/${contract.roomID}`}
+                          className="font-medium text-blue-600 hover:underline"
+                        >
+                          {contract.propertyName}
+                        </Link>
+                        <Badge
+                          className={
+                            contract.role === 'tenant'
+                              ? 'bg-blue-100 text-blue-700 border border-blue-200 hover:bg-blue-100 flex-shrink-0'
+                              : 'bg-purple-100 text-purple-700 border border-purple-200 hover:bg-purple-100 flex-shrink-0'
+                          }
+                        >
+                          {contract.role === 'tenant' ? 'As Tenant' : 'As Subleasor'}
+                        </Badge>
+                      </div>
                       <p className="text-sm text-gray-500">
                         {contract.address}, {contract.city}, {contract.state}
                       </p>
@@ -759,6 +882,21 @@ export default function ProfilePage() {
                         Lease: {formatDate(contract.leaseStart)} – {formatDate(contract.leaseEnd)}
                       </p>
                       <p className="text-sm text-gray-400">Signed {formatDate(contract.signedAt)}</p>
+                      <div className="mt-2 pt-2 border-t text-sm text-gray-500">
+                        {contract.role === 'tenant' ? (
+                          <p>
+                            <span className="font-medium">Subleasor:</span>{' '}
+                            {contract.subleasorName} | {contract.subleasorEmail}
+                            {contract.subleasorPhone ? ` | ${contract.subleasorPhone}` : ''}
+                          </p>
+                        ) : (
+                          <p>
+                            <span className="font-medium">Tenant:</span>{' '}
+                            {contract.tenantName} | {contract.tenantEmail}
+                            {contract.tenantPhone ? ` | ${contract.tenantPhone}` : ''}
+                          </p>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </CardContent>

@@ -5,17 +5,36 @@ import { RoomCard } from '@/components/sublease/room-card';
 import { SearchBar } from '@/components/layout/search-bar';
 import { RoomListItem } from '@/lib/types';
 import { Loader2 } from 'lucide-react';
+import { useAuth } from '@/lib/auth-context';
 
 export default function FindSubleasesPage() {
+  const { user, token } = useAuth();
   const [rooms, setRooms] = useState<RoomListItem[]>([]);
   const [filteredRooms, setFilteredRooms] = useState<RoomListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  // roomID → application status, populated only when logged in
+  const [appStatusMap, setAppStatusMap] = useState<Map<number, 'pending' | 'accepted' | 'rejected'>>(new Map());
 
   useEffect(() => {
     loadRooms();
   }, []);
+
+  // Fetch the user's sent applications once when auth state settles
+  useEffect(() => {
+    if (!user || !token) return;
+    fetch('/api/applications?type=sent', {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then((r) => (r.ok ? r.json() : []))
+      .then((apps: { roomID: number; status: 'pending' | 'accepted' | 'rejected' }[]) => {
+        const map = new Map<number, 'pending' | 'accepted' | 'rejected'>();
+        apps.forEach((a) => map.set(a.roomID, a.status));
+        setAppStatusMap(map);
+      })
+      .catch(() => {});
+  }, [user, token]);
 
   const loadRooms = async () => {
     setLoading(true);
@@ -92,7 +111,12 @@ export default function FindSubleasesPage() {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredRooms.map((room) => (
-              <RoomCard key={room.roomID} room={room} />
+              <RoomCard
+                key={room.roomID}
+                room={room}
+                isOwnListing={!!user && room.subleasorEmail === user.email}
+                applicationStatus={appStatusMap.get(room.roomID)}
+              />
             ))}
           </div>
         )}

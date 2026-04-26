@@ -3,17 +3,16 @@
 import { RoomListItem } from '@/lib/types';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { MapPin, Calendar, Heart, Building } from 'lucide-react';
+import { MapPin, Calendar, Building } from 'lucide-react';
 import Link from 'next/link';
-import { useState } from 'react';
 
 interface RoomCardProps {
   room: RoomListItem;
+  isOwnListing?: boolean;
+  applicationStatus?: 'pending' | 'accepted' | 'rejected';
 }
 
-export function RoomCard({ room }: RoomCardProps) {
-  const [isSaved, setIsSaved] = useState(false);
-
+export function RoomCard({ room, isOwnListing, applicationStatus }: RoomCardProps) {
   const formatDate = (date: Date | string | null) => {
     if (!date) return 'Not specified';
     return new Date(date).toLocaleDateString('en-US', {
@@ -21,12 +20,6 @@ export function RoomCard({ room }: RoomCardProps) {
       day: 'numeric',
       year: 'numeric',
     });
-  };
-
-  const toggleSave = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsSaved(!isSaved);
   };
 
   return (
@@ -44,17 +37,34 @@ export function RoomCard({ room }: RoomCardProps) {
               No image available
             </div>
           )}
-          <button
-            onClick={toggleSave}
-            className="absolute top-3 right-3 p-2 bg-white/90 rounded-full hover:bg-white transition-colors"
-          >
-            <Heart
-              className={`w-5 h-5 ${isSaved ? 'fill-red-500 text-red-500' : 'text-gray-600'}`}
-            />
-          </button>
         </div>
 
         <CardContent className="p-4 space-y-3">
+          {(isOwnListing || applicationStatus) && (
+            <div className="flex flex-wrap gap-1">
+              {isOwnListing && (
+                <Badge className="bg-purple-100 text-purple-700 border border-purple-200 hover:bg-purple-100">
+                  Your Listing
+                </Badge>
+              )}
+              {!isOwnListing && applicationStatus === 'pending' && (
+                <Badge className="bg-amber-100 text-amber-700 border border-amber-200 hover:bg-amber-100">
+                  Applied
+                </Badge>
+              )}
+              {!isOwnListing && applicationStatus === 'accepted' && (
+                <Badge className="bg-green-100 text-green-700 border border-green-200 hover:bg-green-100">
+                  Accepted
+                </Badge>
+              )}
+              {!isOwnListing && applicationStatus === 'rejected' && (
+                <Badge className="bg-red-100 text-red-700 border border-red-200 hover:bg-red-100">
+                  Rejected
+                </Badge>
+              )}
+            </div>
+          )}
+
           <div>
             <h3 className="font-semibold text-gray-900 line-clamp-1">{room.propertyName}</h3>
             <div className="flex items-center text-sm text-gray-600 mt-1">

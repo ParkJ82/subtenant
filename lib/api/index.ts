@@ -697,6 +697,12 @@ export const applicationApi = {
     return result;
   },
 
+  getByTenantAndRoom: async (tenantID: number, roomID: number) => {
+    const sql = 'SELECT applicationID, status FROM Application WHERE tenantID = ? AND roomID = ?';
+    const rows = await query(sql, [tenantID, roomID]) as any[];
+    return rows[0] || null; // { applicationID, status } or null
+  },
+
   updateStatus: async (applicationID: number, status: 'pending' | 'accepted' | 'rejected'): Promise<boolean> => {
     const sql = 'UPDATE Application SET status = ? WHERE applicationID = ?';
     await query(sql, [status, applicationID]);
@@ -848,5 +854,32 @@ export const contractApi = {
       ORDER BY c.signedAt DESC
     `;
     return await query(sql, [tenantID]) as any[];
+  },
+
+  getAllForUser: async (accountID: number) => {
+    const sql = `
+      SELECT
+        c.contractID, c.applicationID, c.tenantID, c.roomID,
+        c.leaseStart, c.leaseEnd, c.monthlyRent, c.signedAt,
+        p.propertyName, p.address, p.city, p.state,
+        CASE WHEN t.accountID = ? THEN 'tenant' ELSE 'subleasor' END AS role,
+        ta.name        AS tenantName,
+        ta.email       AS tenantEmail,
+        ta.phoneNumber AS tenantPhone,
+        sa.name        AS subleasorName,
+        sa.email       AS subleasorEmail,
+        sa.phoneNumber AS subleasorPhone
+      FROM Contract c
+      JOIN RoomInfo r    ON c.roomID      = r.roomID
+      JOIN SuiteInfo s   ON r.suiteID     = s.suiteID
+      JOIN Property p    ON s.propertyID  = p.propertyID
+      JOIN Subleasor sub ON r.subleasorID = sub.subleasorID
+      JOIN Tenant t      ON c.tenantID    = t.tenantID
+      JOIN Account ta    ON t.accountID   = ta.accountID
+      JOIN Account sa    ON sub.accountID = sa.accountID
+      WHERE t.accountID = ? OR sub.accountID = ?
+      ORDER BY c.signedAt DESC
+    `;
+    return await query(sql, [accountID, accountID, accountID]) as any[];
   },
 };

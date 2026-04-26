@@ -13,6 +13,14 @@ import { Loader2, CheckCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 
+interface ExistingTenant {
+  tenantID: number;
+  companyName: string | null;
+  availableFrom: string | null;
+  availableTo: string | null;
+  isListed: boolean;
+}
+
 export default function CreateListingPage() {
   const router = useRouter();
   const { user, token } = useAuth();
@@ -20,6 +28,18 @@ export default function CreateListingPage() {
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [amenities, setAmenities] = useState<Amenity[]>([]);
+
+  // undefined = not yet fetched, null = no existing tenant
+  const [existingTenant, setExistingTenant] = useState<ExistingTenant | null | undefined>(undefined);
+  const [tenantEditing, setTenantEditing] = useState(false);
+  const [tenantEditSaving, setTenantEditSaving] = useState(false);
+  const [tenantEditError, setTenantEditError] = useState<string | null>(null);
+  const [tenantEditForm, setTenantEditForm] = useState({
+    companyName: '',
+    availableFrom: '',
+    availableTo: '',
+    isListed: true,
+  });
 
   // Tenant form state
   const [tenantForm, setTenantForm] = useState<TenantFormData>({
@@ -62,6 +82,94 @@ export default function CreateListingPage() {
   useEffect(() => {
     loadAmenities();
   }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    // Pre-fill account fields from auth context (these are read-only in the form)
+    setTenantForm((prev) => ({
+      ...prev,
+      name: user.name ?? '',
+      email: user.email ?? '',
+      bio: user.bio ?? '',
+      dateOfBirth: user.dateOfBirth ? user.dateOfBirth.toString().slice(0, 10) : '',
+      phoneNumber: user.phoneNumber ?? '',
+    }));
+    fetch(`/api/tenants?accountID=${user.accountID}`)
+      .then((r) => (r.ok ? r.json() : []))
+      .then((tenants: any[]) => {
+        if (tenants.length > 0) {
+          const t = tenants[0];
+          setExistingTenant({
+            tenantID: t.tenantID,
+            companyName: t.companyName,
+            availableFrom: t.availableFrom,
+            availableTo: t.availableTo,
+            isListed: !!t.isListed,
+          });
+        } else {
+          setExistingTenant(null);
+        }
+      })
+      .catch(() => setExistingTenant(null));
+  }, [user]);
+
+  const handleTenantEditOpen = () => {
+    if (!existingTenant) return;
+    setTenantEditForm({
+      companyName: existingTenant.companyName ?? '',
+      availableFrom: existingTenant.availableFrom
+        ? existingTenant.availableFrom.toString().slice(0, 10)
+        : '',
+      availableTo: existingTenant.availableTo
+        ? existingTenant.availableTo.toString().slice(0, 10)
+        : '',
+      isListed: existingTenant.isListed,
+    });
+    setTenantEditError(null);
+    setTenantEditing(true);
+  };
+
+  const handleTenantEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setTenantEditSaving(true);
+    setTenantEditError(null);
+    try {
+      const res = await fetch('/api/profile', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          tenant: {
+            companyName: tenantEditForm.companyName || null,
+            availableFrom: tenantEditForm.availableFrom || null,
+            availableTo: tenantEditForm.availableTo || null,
+            isListed: tenantEditForm.isListed,
+          },
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to save');
+      }
+      const data = await res.json();
+      if (data.tenant) {
+        setExistingTenant({
+          tenantID: data.tenant.tenantID,
+          companyName: data.tenant.companyName,
+          availableFrom: data.tenant.availableFrom,
+          availableTo: data.tenant.availableTo,
+          isListed: !!data.tenant.isListed,
+        });
+      }
+      setTenantEditing(false);
+    } catch (err: any) {
+      setTenantEditError(err.message || 'Failed to save profile');
+    } finally {
+      setTenantEditSaving(false);
+    }
+  };
 
   const loadAmenities = async () => {
     try {
@@ -196,113 +304,226 @@ export default function CreateListingPage() {
                 <CardTitle>Tenant Profile</CardTitle>
               </CardHeader>
               <CardContent>
-                <form onSubmit={handleTenantSubmit} className="space-y-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {/* Loading: existingTenant check in-flight */}
+                {existingTenant === undefined && (
+                  <div className="flex items-center justify-center py-8 text-gray-400">
+                    <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                    Checking your profile...
+                  </div>
+                )}
+
+                {/* User already has a tenant profile */}
+                {existingTenant !== undefined && existingTenant !== null && (
+                  tenantEditing ? (
+                    <form onSubmit={handleTenantEditSubmit} className="space-y-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="edit-company">Company / School</Label>
+                        <Input
+                          id="edit-company"
+                          value={tenantEditForm.companyName}
+                          onChange={(e) => setTenantEditForm({ ...tenantEditForm, companyName: e.target.value })}
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="edit-avail-from">Available From</Label>
+                          <Input
+                            id="edit-avail-from"
+                            type="date"
+                            value={tenantEditForm.availableFrom}
+                            onChange={(e) => setTenantEditForm({ ...tenantEditForm, availableFrom: e.target.value })}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="edit-avail-to">Available To</Label>
+                          <Input
+                            id="edit-avail-to"
+                            type="date"
+                            value={tenantEditForm.availableTo}
+                            onChange={(e) => setTenantEditForm({ ...tenantEditForm, availableTo: e.target.value })}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-3">
+                        <input
+                          id="edit-listed"
+                          type="checkbox"
+                          className="w-4 h-4 rounded border-gray-300"
+                          checked={tenantEditForm.isListed}
+                          onChange={(e) => setTenantEditForm({ ...tenantEditForm, isListed: e.target.checked })}
+                        />
+                        <Label htmlFor="edit-listed">Show my profile to subleasors (listed)</Label>
+                      </div>
+
+                      {tenantEditError && (
+                        <p className="text-sm text-red-600 bg-red-50 p-3 rounded">{tenantEditError}</p>
+                      )}
+
+                      <div className="flex gap-3">
+                        <Button type="submit" disabled={tenantEditSaving}>
+                          {tenantEditSaving ? (
+                            <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Saving...</>
+                          ) : (
+                            'Save Changes'
+                          )}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => { setTenantEditing(false); setTenantEditError(null); }}
+                          disabled={tenantEditSaving}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    </form>
+                  ) : (
+                    <div className="space-y-4">
+                      <p className="text-gray-700 font-medium">You already have a tenant profile.</p>
+
+                      <div className="space-y-2 text-sm text-gray-600">
+                        {existingTenant.companyName && (
+                          <p><span className="font-medium">Company / School:</span> {existingTenant.companyName}</p>
+                        )}
+                        {existingTenant.availableFrom && (
+                          <p>
+                            <span className="font-medium">Available From:</span>{' '}
+                            {new Date(existingTenant.availableFrom).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                          </p>
+                        )}
+                        {existingTenant.availableTo && (
+                          <p>
+                            <span className="font-medium">Available To:</span>{' '}
+                            {new Date(existingTenant.availableTo).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                          </p>
+                        )}
+                        <p>
+                          <span className="font-medium">Status:</span>{' '}
+                          {existingTenant.isListed ? 'Listed (visible to subleasors)' : 'Unlisted (hidden)'}
+                        </p>
+                      </div>
+
+                      <Button variant="outline" onClick={handleTenantEditOpen}>
+                        Edit Profile
+                      </Button>
+                    </div>
+                  )
+                )}
+
+                {/* No tenant profile yet — show create form */}
+                {existingTenant === null && (
+                  <form onSubmit={handleTenantSubmit} className="space-y-4">
+                    {/* Account fields — pre-filled from auth context, read-only */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="tenant-name">Name</Label>
+                        <Input
+                          id="tenant-name"
+                          value={tenantForm.name}
+                          disabled
+                          className="bg-gray-50"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="tenant-email">Email</Label>
+                        <Input
+                          id="tenant-email"
+                          type="email"
+                          value={tenantForm.email}
+                          disabled
+                          className="bg-gray-50"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="tenant-dob">Date of Birth</Label>
+                        <Input
+                          id="tenant-dob"
+                          type="date"
+                          value={tenantForm.dateOfBirth}
+                          disabled
+                          className="bg-gray-50"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="tenant-phone">Phone Number</Label>
+                        <Input
+                          id="tenant-phone"
+                          type="tel"
+                          value={tenantForm.phoneNumber}
+                          disabled
+                          className="bg-gray-50"
+                        />
+                      </div>
+                    </div>
+
                     <div className="space-y-2">
-                      <Label htmlFor="tenant-name">Name *</Label>
-                      <Input
-                        id="tenant-name"
-                        required
-                        value={tenantForm.name}
-                        onChange={(e) => setTenantForm({ ...tenantForm, name: e.target.value })}
+                      <Label htmlFor="tenant-bio">Bio</Label>
+                      <Textarea
+                        id="tenant-bio"
+                        rows={2}
+                        value={tenantForm.bio}
+                        disabled
+                        className="bg-gray-50 resize-none"
                       />
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="tenant-email">Email *</Label>
-                      <Input
-                        id="tenant-email"
-                        type="email"
-                        required
-                        value={tenantForm.email}
-                        onChange={(e) => setTenantForm({ ...tenantForm, email: e.target.value })}
-                      />
+
+                    <p className="text-xs text-gray-500">
+                      To update this information, go to{' '}
+                      <a href="/profile" className="underline hover:text-gray-700">
+                        Profile → Edit Account
+                      </a>
+                      .
+                    </p>
+
+                    <div className="border-t pt-4 space-y-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="tenant-company">Company / School</Label>
+                        <Input
+                          id="tenant-company"
+                          value={tenantForm.companyName}
+                          onChange={(e) => setTenantForm({ ...tenantForm, companyName: e.target.value })}
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="tenant-start">Available From</Label>
+                          <Input
+                            id="tenant-start"
+                            type="date"
+                            value={tenantForm.availableFrom}
+                            onChange={(e) => setTenantForm({ ...tenantForm, availableFrom: e.target.value })}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="tenant-end">Available To</Label>
+                          <Input
+                            id="tenant-end"
+                            type="date"
+                            value={tenantForm.availableTo}
+                            onChange={(e) => setTenantForm({ ...tenantForm, availableTo: e.target.value })}
+                          />
+                        </div>
+                      </div>
                     </div>
-                  </div>
 
-                  <div className="space-y-2">
-                    <Label htmlFor="tenant-password">Password *</Label>
-                    <Input
-                      id="tenant-password"
-                      type="password"
-                      required
-                      value={tenantForm.password}
-                      onChange={(e) => setTenantForm({ ...tenantForm, password: e.target.value })}
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="tenant-dob">Date of Birth</Label>
-                      <Input
-                        id="tenant-dob"
-                        type="date"
-                        value={tenantForm.dateOfBirth}
-                        onChange={(e) => setTenantForm({ ...tenantForm, dateOfBirth: e.target.value })}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="tenant-phone">Phone Number</Label>
-                      <Input
-                        id="tenant-phone"
-                        type="tel"
-                        value={tenantForm.phoneNumber}
-                        onChange={(e) => setTenantForm({ ...tenantForm, phoneNumber: e.target.value })}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="tenant-company">Company Name</Label>
-                    <Input
-                      id="tenant-company"
-                      value={tenantForm.companyName}
-                      onChange={(e) => setTenantForm({ ...tenantForm, companyName: e.target.value })}
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="tenant-start">Available From</Label>
-                      <Input
-                        id="tenant-start"
-                        type="date"
-                        value={tenantForm.availableFrom}
-                        onChange={(e) => setTenantForm({ ...tenantForm, availableFrom: e.target.value })}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="tenant-end">Available To</Label>
-                      <Input
-                        id="tenant-end"
-                        type="date"
-                        value={tenantForm.availableTo}
-                        onChange={(e) => setTenantForm({ ...tenantForm, availableTo: e.target.value })}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="tenant-bio">Bio</Label>
-                    <Textarea
-                      id="tenant-bio"
-                      rows={3}
-                      value={tenantForm.bio}
-                      onChange={(e) => setTenantForm({ ...tenantForm, bio: e.target.value })}
-                      placeholder="Tell us about yourself..."
-                    />
-                  </div>
-
-                  <Button type="submit" className="w-full" disabled={submitting}>
-                    {submitting ? (
-                      <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        Creating...
-                      </>
-                    ) : (
-                      'Create Tenant Profile'
-                    )}
-                  </Button>
-                </form>
+                    <Button type="submit" className="w-full" disabled={submitting}>
+                      {submitting ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Creating...
+                        </>
+                      ) : (
+                        'Create Tenant Profile'
+                      )}
+                    </Button>
+                  </form>
+                )}
               </CardContent>
             </Card>
           </TabsContent>

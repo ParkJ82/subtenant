@@ -8,10 +8,12 @@ export async function GET(request: NextRequest) {
     const searchParams = request.nextUrl.searchParams;
     const type = searchParams.get('type');
 
-    // Auth-gated: fetch the calling user's sent or received applications
-    if (type === 'sent' || type === 'received') {
+    // Auth-gated helpers
+    if (type === 'sent' || type === 'received' || type === 'check') {
       const userId = getUserIdFromRequest(request);
       if (!userId) {
+        // 'check' is a soft check — unauthenticated users simply have no application
+        if (type === 'check') return NextResponse.json(null);
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
       }
 
@@ -22,9 +24,20 @@ export async function GET(request: NextRequest) {
         return NextResponse.json(apps);
       }
 
-      // type === 'received'
-      const apps = await applicationApi.getReceivedByAccountId(userId);
-      return NextResponse.json(apps);
+      if (type === 'received') {
+        const apps = await applicationApi.getReceivedByAccountId(userId);
+        return NextResponse.json(apps);
+      }
+
+      // type === 'check': returns { applicationID, status } or null for this (tenant, room) pair
+      const roomIDParam = searchParams.get('roomID');
+      if (!roomIDParam) {
+        return NextResponse.json({ error: 'roomID required for type=check' }, { status: 400 });
+      }
+      const tenant = await tenantApi.getByAccountId(userId);
+      if (!tenant) return NextResponse.json(null);
+      const existing = await applicationApi.getByTenantAndRoom(tenant.tenantID, parseInt(roomIDParam));
+      return NextResponse.json(existing);
     }
 
     // Legacy params kept for backward compatibility
@@ -91,6 +104,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: 'You must create a tenant profile before applying' },
         { status: 400 }
+      );
+    }
+
+    // Prevent duplicate / re-apply after rejection
+    const existing = await applicationApi.getByTenantAndRoom(tenant.tenantID, parseInt(roomID));
+    if (existing) {
+      const messages: Record<string, string> = {
+        pending:  'You have already applied to this listing',
+        accepted: 'You have already been accepted for this listing',
+        rejected: 'You have already been rejected for this listing. You cannot re-apply.',
+      };
+      return NextResponse.json(
+        { error: messages[existing.status] ?? 'You already have an application for this listing' },
+        { status: 409 }
       );
     }
 
