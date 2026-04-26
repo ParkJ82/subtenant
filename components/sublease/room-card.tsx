@@ -5,6 +5,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { MapPin, Calendar, Building } from 'lucide-react';
 import Link from 'next/link';
+import { extractYouTubeId } from '@/lib/utils';
 
 interface RoomCardProps {
   room: RoomListItem;
@@ -26,17 +27,31 @@ export function RoomCard({ room, isOwnListing, applicationStatus }: RoomCardProp
     <Link href={`/sublease/${room.roomID}`}>
       <Card className="hover:shadow-lg transition-shadow cursor-pointer overflow-hidden h-full">
         <div className="relative h-48 bg-gray-100">
-          {room.photos.length > 0 ? (
-            <img
-              src={room.photos[0].photoUrl}
-              alt={room.propertyName}
-              className="w-full h-full object-cover"
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center text-gray-400">
-              No image available
-            </div>
-          )}
+          {(() => {
+            const videoId = room.videos.length > 0
+              ? extractYouTubeId(room.videos[0].videoUrl)
+              : null;
+            if (!videoId) {
+              return (
+                <div className="w-full h-full flex items-center justify-center text-gray-400">
+                  No video available
+                </div>
+              );
+            }
+            return (
+              <img
+                src={`https://img.youtube.com/vi/${videoId}/maxresdefault.jpg`}
+                alt={room.propertyName}
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  const img = e.currentTarget;
+                  if (img.src.includes('maxresdefault')) {
+                    img.src = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
+                  }
+                }}
+              />
+            );
+          })()}
         </div>
 
         <CardContent className="p-4 space-y-3">

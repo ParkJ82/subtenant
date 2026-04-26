@@ -6,8 +6,9 @@ import { RoomWithDetails } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { MapPin, Calendar, ArrowLeft, Loader2, ChevronDown, ChevronUp, Building, Home } from 'lucide-react';
+import { MapPin, Calendar, ArrowLeft, Loader2, Building, Home } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
+import { extractYouTubeId } from '@/lib/utils';
 
 export default function SubleaseInfoPage() {
   const params = useParams();
@@ -17,7 +18,6 @@ export default function SubleaseInfoPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showFullDescription, setShowFullDescription] = useState(false);
-  const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [applying, setApplying] = useState(false);
   const [applyError, setApplyError] = useState<string | null>(null);
   // undefined = not yet fetched, null = no application
@@ -112,20 +112,6 @@ export default function SubleaseInfoPage() {
     });
   };
 
-  const nextImage = () => {
-    if (room && room.photos.length > 0) {
-      setCurrentImageIndex((currentImageIndex + 1) % room.photos.length);
-    }
-  };
-
-  const prevImage = () => {
-    if (room && room.photos.length > 0) {
-      setCurrentImageIndex(
-        currentImageIndex === 0 ? room.photos.length - 1 : currentImageIndex - 1
-      );
-    }
-  };
-
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -163,51 +149,33 @@ export default function SubleaseInfoPage() {
         <div className="space-y-6">
           <Card>
             <CardContent className="p-0">
-              <div className="relative h-64 md:h-96 bg-gray-100">
-                {room.photos.length > 0 ? (
-                  <>
-                    <img
-                      src={room.photos[currentImageIndex].photoUrl}
-                      alt={room.suite.property.propertyName}
-                      className="w-full h-full object-cover"
-                    />
-                    {room.photos.length > 1 && (
-                      <>
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          className="absolute left-4 top-1/2 -translate-y-1/2 bg-white/90"
-                          onClick={prevImage}
-                        >
-                          <ChevronUp className="w-5 h-5 -rotate-90" />
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          className="absolute right-4 top-1/2 -translate-y-1/2 bg-white/90"
-                          onClick={nextImage}
-                        >
-                          <ChevronDown className="w-5 h-5 rotate-90" />
-                        </Button>
-                        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
-                          {room.photos.map((_, index) => (
-                            <div
-                              key={index}
-                              className={`w-2 h-2 rounded-full ${
-                                index === currentImageIndex ? 'bg-white' : 'bg-white/50'
-                              }`}
-                            />
-                          ))}
-                        </div>
-                      </>
-                    )}
-                  </>
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-gray-400">
-                    No images available
-                  </div>
-                )}
-              </div>
+              {room.videos.length > 0 ? (
+                <div className="p-4 space-y-4">
+                  {room.videos.map((video) => {
+                    const videoId = extractYouTubeId(video.videoUrl);
+                    if (!videoId) return null;
+                    return (
+                      <div
+                        key={video.videoID}
+                        className="relative w-full rounded-lg overflow-hidden"
+                        style={{ paddingBottom: '56.25%' }}
+                      >
+                        <iframe
+                          className="absolute inset-0 w-full h-full"
+                          src={`https://www.youtube.com/embed/${videoId}`}
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                          allowFullScreen
+                          title={room.suite.property.propertyName}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="h-64 bg-gray-100 flex items-center justify-center text-gray-400">
+                  No video available
+                </div>
+              )}
             </CardContent>
           </Card>
 

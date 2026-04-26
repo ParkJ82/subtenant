@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { applicationApi, contractApi } from '@/lib/api';
 import { getUserIdFromRequest } from '@/lib/api-auth';
+import { query } from '@/lib/db';
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -40,6 +41,32 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
         { error: 'Only the room owner can accept or reject applications' },
         { status: 403 }
       );
+    }
+
+    if (status === 'accepted') {
+      // Get the room's availability period
+      const roomRows = await query(
+        `SELECT availableFrom, availableTo FROM RoomInfo WHERE roomID = ?`,
+        [info.roomID]
+      ) as any[];
+      const room = roomRows[0];
+
+      if (room?.availableFrom && room?.availableTo) {
+        // Check for any overlapping contract for this tenant
+        const overlap = await query(
+          `SELECT c.contractID FROM Contract c
+           WHERE c.tenantID = ?
+           AND c.leaseStart <= ?
+           AND c.leaseEnd   >= ?`,
+          [info.tenantID, room.availableTo, room.availableFrom]
+        ) as any[];
+        if (overlap.length > 0) {
+          return NextResponse.json(
+            { error: 'This tenant already has a contract that overlaps with this listing period' },
+            { status: 409 }
+          );
+        }
+      }
     }
 
     await applicationApi.updateStatus(applicationID, status);

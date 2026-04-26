@@ -27,6 +27,8 @@ interface SentApplication {
   message: string | null;
   appliedAt: string;
   monthlyRent: number;
+  availableFrom: string | null;
+  availableTo: string | null;
   propertyName: string;
   address: string;
   city: string;
@@ -41,6 +43,8 @@ interface ReceivedApplication {
   message: string | null;
   appliedAt: string;
   monthlyRent: number;
+  availableFrom: string | null;
+  availableTo: string | null;
   propertyName: string;
   address: string;
   city: string;
@@ -219,7 +223,7 @@ export default function ProfilePage() {
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        if (res.status === 403 && err.error?.includes('accepted application')) {
+        if (res.status === 403 && err.error?.includes('active contract')) {
           setListingFilled(true);
           return;
         }
@@ -385,12 +389,16 @@ export default function ProfilePage() {
     return 'secondary';
   };
 
-  // True when any received application for the user's own listing is accepted.
-  // Derived from already-fetched data — no extra API call needed.
-  const roomHasAcceptedApp =
+  // Lock edit/delete only while an active (non-expired) contract exists for the listing.
+  // Derived from already-fetched contracts — no extra API call needed.
+  const today = new Date(new Date().toDateString()); // midnight today
+  const roomLocked =
     !!myRoom &&
-    receivedApps.some(
-      (a) => a.roomID === myRoom.roomID && a.status === 'accepted'
+    contracts.some(
+      (c) =>
+        c.roomID === myRoom.roomID &&
+        c.role === 'subleasor' &&
+        new Date(c.leaseEnd) >= today
     );
 
   return (
@@ -647,9 +655,9 @@ export default function ProfilePage() {
                       <Button variant="outline" size="sm">View Listing</Button>
                     </Link>
 
-                    {roomHasAcceptedApp ? (
+                    {roomLocked ? (
                       <p className="text-xs text-gray-500">
-                        This listing has an accepted application and cannot be modified or deleted.
+                        This listing has an active contract and cannot be modified or deleted.
                       </p>
                     ) : (
                       <>
@@ -739,6 +747,11 @@ export default function ProfilePage() {
                           <p className="text-sm text-gray-500">
                             ${app.monthlyRent}/mo · Applied {formatDate(app.appliedAt)}
                           </p>
+                          {(app.availableFrom || app.availableTo) && (
+                            <p className="text-sm text-gray-500">
+                              Lease Period: {formatDate(app.availableFrom)} – {formatDate(app.availableTo)}
+                            </p>
+                          )}
                           {app.message && (
                             <p className="text-sm text-gray-600 mt-1 italic">
                               &ldquo;{app.message}&rdquo;
@@ -802,6 +815,11 @@ export default function ProfilePage() {
                           <p className="text-sm text-gray-500">
                             Applied {formatDate(app.appliedAt)}
                           </p>
+                          {(app.availableFrom || app.availableTo) && (
+                            <p className="text-sm text-gray-500">
+                              Lease Period: {formatDate(app.availableFrom)} – {formatDate(app.availableTo)}
+                            </p>
+                          )}
                           {app.message && (
                             <p className="text-sm text-gray-600 mt-1 italic">
                               &ldquo;{app.message}&rdquo;
@@ -864,15 +882,26 @@ export default function ProfilePage() {
                         >
                           {contract.propertyName}
                         </Link>
-                        <Badge
-                          className={
-                            contract.role === 'tenant'
-                              ? 'bg-blue-100 text-blue-700 border border-blue-200 hover:bg-blue-100 flex-shrink-0'
-                              : 'bg-purple-100 text-purple-700 border border-purple-200 hover:bg-purple-100 flex-shrink-0'
-                          }
-                        >
-                          {contract.role === 'tenant' ? 'As Tenant' : 'As Subleasor'}
-                        </Badge>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          {new Date(contract.leaseEnd) >= new Date(new Date().toDateString()) ? (
+                            <Badge className="bg-green-100 text-green-700 border border-green-200 hover:bg-green-100">
+                              Active
+                            </Badge>
+                          ) : (
+                            <Badge className="bg-gray-100 text-gray-500 border border-gray-200 hover:bg-gray-100">
+                              Expired
+                            </Badge>
+                          )}
+                          <Badge
+                            className={
+                              contract.role === 'tenant'
+                                ? 'bg-blue-100 text-blue-700 border border-blue-200 hover:bg-blue-100'
+                                : 'bg-purple-100 text-purple-700 border border-purple-200 hover:bg-purple-100'
+                            }
+                          >
+                            {contract.role === 'tenant' ? 'As Tenant' : 'As Subleasor'}
+                          </Badge>
+                        </div>
                       </div>
                       <p className="text-sm text-gray-500">
                         {contract.address}, {contract.city}, {contract.state}

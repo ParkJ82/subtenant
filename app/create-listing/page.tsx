@@ -73,11 +73,12 @@ export default function CreateListingPage() {
     availableTo: '',
     roomDescription: '',
     amenityIDs: [],
-    photoUrls: [],
+    videoUrls: [],
   });
 
   const [selectedAmenities, setSelectedAmenities] = useState<number[]>([]);
-  const [photoUrls, setPhotoUrls] = useState<string[]>(['']);
+  const [videoUrl, setVideoUrl] = useState('');
+  const [roomError, setRoomError] = useState<string | null>(null);
 
   useEffect(() => {
     loadAmenities();
@@ -212,6 +213,14 @@ export default function CreateListingPage() {
 
   const handleRoomSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setRoomError(null);
+
+    // Client-side validation
+    if (!roomForm.availableFrom || !roomForm.availableTo) {
+      setRoomError('Available from and to dates are required');
+      return;
+    }
+
     setSubmitting(true);
     try {
       const response = await fetch('/api/rooms', {
@@ -223,13 +232,21 @@ export default function CreateListingPage() {
         body: JSON.stringify({
           ...roomForm,
           amenityIDs: selectedAmenities,
-          photoUrls: photoUrls.filter(url => url.trim() !== ''),
+          videoUrls: videoUrl.trim() ? [videoUrl.trim()] : [],
         }),
       });
 
       if (!response.ok) {
         const err = await response.json().catch(() => ({}));
-        throw new Error(err.error || 'Failed to create room');
+        const msg = err.error || '';
+
+        if (msg.includes('already have a room') || msg.includes('DUPLICATE_LISTING')) {
+          throw new Error('You already have an active listing');
+        }
+        if (msg.toLowerCase().includes('year') || msg.toLowerCase().includes('range')) {
+          throw new Error('Year built must be between 1901 and 2155');
+        }
+        throw new Error(msg || 'Failed to create listing. Please try again.');
       }
 
       setSuccess(true);
@@ -238,7 +255,7 @@ export default function CreateListingPage() {
       }, 2000);
     } catch (error: any) {
       console.error('Failed to create room listing:', error);
-      alert(error?.message || 'Failed to create room listing. Please try again.');
+      setRoomError(error?.message || 'Failed to create listing. Please try again.');
     } finally {
       setSubmitting(false);
     }
@@ -250,20 +267,6 @@ export default function CreateListingPage() {
         ? prev.filter(id => id !== amenityID)
         : [...prev, amenityID]
     );
-  };
-
-  const addPhotoUrl = () => {
-    setPhotoUrls([...photoUrls, '']);
-  };
-
-  const updatePhotoUrl = (index: number, value: string) => {
-    const newUrls = [...photoUrls];
-    newUrls[index] = value;
-    setPhotoUrls(newUrls);
-  };
-
-  const removePhotoUrl = (index: number) => {
-    setPhotoUrls(photoUrls.filter((_, i) => i !== index));
   };
 
   if (success) {
@@ -681,19 +684,21 @@ export default function CreateListingPage() {
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="room-available-from">Available From</Label>
+                      <Label htmlFor="room-available-from">Available From *</Label>
                       <Input
                         id="room-available-from"
                         type="date"
+                        required
                         value={roomForm.availableFrom}
                         onChange={(e) => setRoomForm({ ...roomForm, availableFrom: e.target.value })}
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="room-available-to">Available To</Label>
+                      <Label htmlFor="room-available-to">Available To *</Label>
                       <Input
                         id="room-available-to"
                         type="date"
+                        required
                         value={roomForm.availableTo}
                         onChange={(e) => setRoomForm({ ...roomForm, availableTo: e.target.value })}
                       />
@@ -731,35 +736,20 @@ export default function CreateListingPage() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label>Photo URLs</Label>
-                    {photoUrls.map((url, index) => (
-                      <div key={index} className="flex gap-2">
-                        <Input
-                          value={url}
-                          onChange={(e) => updatePhotoUrl(index, e.target.value)}
-                          placeholder="https://example.com/photo.jpg"
-                        />
-                        {photoUrls.length > 1 && (
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="icon"
-                            onClick={() => removePhotoUrl(index)}
-                          >
-                            ×
-                          </Button>
-                        )}
-                      </div>
-                    ))}
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={addPhotoUrl}
-                    >
-                      Add Photo URL
-                    </Button>
+                    <Label htmlFor="room-video">YouTube Video URL</Label>
+                    <Input
+                      id="room-video"
+                      value={videoUrl}
+                      onChange={(e) => setVideoUrl(e.target.value)}
+                      placeholder="https://www.youtube.com/watch?v=..."
+                    />
                   </div>
+
+                  {roomError && (
+                    <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md text-sm">
+                      {roomError}
+                    </div>
+                  )}
 
                   <Button type="submit" className="w-full" disabled={submitting}>
                     {submitting ? (

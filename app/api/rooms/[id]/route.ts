@@ -72,15 +72,17 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
       return NextResponse.json({ error: 'isListed (boolean) is required' }, { status: 400 });
     }
 
-    // Prevent re-listing a room that already has an accepted application
+    // Block re-listing while an active contract exists
     if (isListed === true) {
-      const accepted = await query(
-        `SELECT applicationID FROM Application WHERE roomID = ? AND status = 'accepted'`,
+      const activeContract = await query(
+        `SELECT c.contractID FROM Contract c
+         JOIN Application a ON c.applicationID = a.applicationID
+         WHERE a.roomID = ? AND a.status = 'accepted' AND c.leaseEnd >= CURDATE()`,
         [roomID]
       ) as any[];
-      if (accepted.length > 0) {
+      if (activeContract.length > 0) {
         return NextResponse.json(
-          { error: 'This listing has an accepted application and cannot be re-listed' },
+          { error: 'This listing has an active contract and cannot be re-listed' },
           { status: 403 }
         );
       }
@@ -113,13 +115,27 @@ export async function DELETE(request: NextRequest, { params }: RouteContext) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
+    // Block deletion while an active contract exists
+    const activeContract = await query(
+      `SELECT c.contractID FROM Contract c
+       JOIN Application a ON c.applicationID = a.applicationID
+       WHERE a.roomID = ? AND a.status = 'accepted' AND c.leaseEnd >= CURDATE()`,
+      [roomID]
+    ) as any[];
+    if (activeContract.length > 0) {
+      return NextResponse.json(
+        { error: 'This listing has an active contract and cannot be deleted' },
+        { status: 403 }
+      );
+    }
+
     const { suiteID, propertyID } = meta;
 
     // Cascade delete in FK-safe order
     await query('DELETE FROM Contract     WHERE roomID = ?', [roomID]);
     await query('DELETE FROM Application  WHERE roomID = ?', [roomID]);
     await query('DELETE FROM RoomAmenity  WHERE roomID = ?', [roomID]);
-    await query('DELETE FROM ListingPhoto WHERE roomID = ?', [roomID]);
+    await query('DELETE FROM ListingVideo WHERE roomID = ?', [roomID]);
     await query('DELETE FROM RoomInfo     WHERE roomID = ?', [roomID]);
     await query('DELETE FROM SuiteInfo    WHERE suiteID = ?', [suiteID]);
     await query('DELETE FROM Property     WHERE propertyID = ?', [propertyID]);
