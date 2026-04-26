@@ -9,9 +9,10 @@ import Link from 'next/link';
 
 interface TenantCardProps {
   tenant: TenantWithAccount;
+  isOwnProfile?: boolean;
 }
 
-export function TenantCard({ tenant }: TenantCardProps) {
+export function TenantCard({ tenant, isOwnProfile }: TenantCardProps) {
   const initials = tenant.account.name
     .split(' ')
     .map(n => n[0])
@@ -43,6 +44,11 @@ export function TenantCard({ tenant }: TenantCardProps) {
                 <p className="text-sm text-gray-500">{tenant.account.email}</p>
               </div>
             </div>
+            {isOwnProfile && (
+              <Badge className="bg-purple-100 text-purple-700 border border-purple-200 hover:bg-purple-100 flex-shrink-0">
+                Your Profile
+              </Badge>
+            )}
           </div>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -65,10 +71,6 @@ export function TenantCard({ tenant }: TenantCardProps) {
               {tenant.account.bio}
             </p>
           )}
-
-          <Badge variant={tenant.isListed ? 'default' : 'secondary'}>
-            {tenant.isListed ? 'Active' : 'Inactive'}
-          </Badge>
         </CardContent>
       </Card>
     </Link>

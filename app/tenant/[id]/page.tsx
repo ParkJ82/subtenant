@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { MapPin, Calendar, Mail, ArrowLeft, Loader2, Building, Phone } from 'lucide-react';
+import { Calendar, ArrowLeft, Loader2, Building, Phone } from 'lucide-react';
 
 export default function TenantInfoPage() {
   const params = useParams();
@@ -33,12 +33,6 @@ export default function TenantInfoPage() {
       setError('Failed to load tenant information.');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleContact = () => {
-    if (tenant) {
-      window.location.href = `mailto:${tenant.account.email}?subject=SubTenants - Regarding your sublease search`;
     }
   };
 
@@ -148,12 +142,6 @@ export default function TenantInfoPage() {
               </div>
             )}
 
-            <div className="pt-4 border-t">
-              <Button onClick={handleContact} className="w-full sm:w-auto" size="lg">
-                <Mail className="w-4 h-4 mr-2" />
-                Contact {tenant.account.name}
-              </Button>
-            </div>
           </CardContent>
         </Card>
       </div>

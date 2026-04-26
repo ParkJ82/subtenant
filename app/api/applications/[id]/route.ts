@@ -71,10 +71,16 @@ export async function DELETE(request: NextRequest, { params }: RouteContext) {
     if (!info) {
       return NextResponse.json({ error: 'Application not found' }, { status: 404 });
     }
-    if (info.status !== 'pending') {
+    if (info.status === 'rejected') {
       return NextResponse.json(
-        { error: 'Only pending applications can be withdrawn' },
-        { status: 409 }
+        { error: 'Rejected applications cannot be deleted' },
+        { status: 403 }
+      );
+    }
+    if (info.status === 'accepted') {
+      return NextResponse.json(
+        { error: 'Accepted applications cannot be deleted' },
+        { status: 403 }
       );
     }
     if (info.tenantAccountID !== userId) {

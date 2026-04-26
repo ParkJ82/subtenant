@@ -1,16 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { contractApi } from '@/lib/api';
+import { getUserIdFromRequest } from '@/lib/api-auth';
 
 export async function GET(request: NextRequest) {
+  const userId = getUserIdFromRequest(request);
+  if (!userId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   try {
-    const searchParams = request.nextUrl.searchParams;
-    const tenantID = searchParams.get('tenantID');
-
-    if (!tenantID) {
-      return NextResponse.json({ error: 'tenantID query param required' }, { status: 400 });
-    }
-
-    const contracts = await contractApi.getByTenantIdWithDetails(parseInt(tenantID));
+    const contracts = await contractApi.getAllForUser(userId);
     return NextResponse.json(contracts);
   } catch (error) {
     console.error('Error fetching contracts:', error);

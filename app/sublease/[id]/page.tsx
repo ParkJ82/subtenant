@@ -6,25 +6,54 @@ import { RoomWithDetails } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { MapPin, Calendar, Mail, ArrowLeft, Loader2, ChevronDown, ChevronUp, Building, Home } from 'lucide-react';
+import { MapPin, Calendar, ArrowLeft, Loader2, ChevronDown, ChevronUp, Building, Home } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 
 export default function SubleaseInfoPage() {
   const params = useParams();
   const router = useRouter();
-  const { isAuthenticated, token } = useAuth();
+  const { isAuthenticated, token, user } = useAuth();
   const [room, setRoom] = useState<RoomWithDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showFullDescription, setShowFullDescription] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [applying, setApplying] = useState(false);
-  const [applied, setApplied] = useState(false);
   const [applyError, setApplyError] = useState<string | null>(null);
+  // undefined = not yet fetched, null = no application
+  const [existingStatus, setExistingStatus] = useState<'pending' | 'accepted' | 'rejected' | null | undefined>(undefined);
 
   useEffect(() => {
     loadData();
   }, [params.id]);
+
+  // true as soon as both room and user are loaded and IDs match
+  const isOwnListing = !!user && !!room && room.subleasor.accountID === user.accountID;
+
+  // Check for an existing application whenever auth state or room changes
+  useEffect(() => {
+    if (!isAuthenticated || !room) {
+      if (!isAuthenticated) setExistingStatus(null);
+      return;
+    }
+    // Own listing — skip the application check entirely
+    if (user && room.subleasor.accountID === user.accountID) return;
+    const checkExisting = async () => {
+      try {
+        const res = await fetch(
+          `/api/applications?type=check&roomID=${room.roomID}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        if (res.ok) {
+          const data = await res.json();
+          setExistingStatus(data ? data.status : null);
+        }
+      } catch {
+        setExistingStatus(null);
+      }
+    };
+    checkExisting();
+  }, [isAuthenticated, room, user]);
 
   const loadData = async () => {
     setLoading(true);
@@ -39,12 +68,6 @@ export default function SubleaseInfoPage() {
       setError('Failed to load room information.');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleContact = () => {
-    if (room) {
-      window.location.href = `mailto:${room.subleasor.account.email}?subject=SubTenants - Regarding ${room.suite.property.address}`;
     }
   };
 
@@ -72,7 +95,7 @@ export default function SubleaseInfoPage() {
         throw new Error(err.error || 'Failed to submit application');
       }
 
-      setApplied(true);
+      setExistingStatus('pending');
     } catch (err: any) {
       setApplyError(err.message);
     } finally {
@@ -311,29 +334,56 @@ export default function SubleaseInfoPage() {
               {applyError && (
                 <p className="text-sm text-red-600 bg-red-50 p-3 rounded">{applyError}</p>
               )}
-              {applied && (
+              {existingStatus === 'pending' && (
                 <p className="text-sm text-green-700 bg-green-50 p-3 rounded">
-                  Application submitted! The subleasor will be in touch.
+                  Your application is pending. The subleasor will be in touch.
                 </p>
               )}
 
               <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t">
-                <Button onClick={handleContact} variant="outline" className="flex-1">
-                  <Mail className="w-4 h-4 mr-2" />
-                  Contact Subleasor
-                </Button>
-                <Button onClick={handleApply} className="flex-1" disabled={applying || applied}>
-                  {applying ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Submitting...
-                    </>
-                  ) : applied ? (
-                    'Applied!'
-                  ) : (
-                    'Apply for Room'
-                  )}
-                </Button>
+                {isOwnListing ? (
+                  <Button
+                    className="flex-1 cursor-not-allowed opacity-60"
+                    disabled
+                    variant="outline"
+                  >
+                    Your Listing
+                  </Button>
+                ) : (
+                  <>
+                    {existingStatus === 'pending' && (
+                      <Button className="flex-1" disabled>
+                        Application Pending
+                      </Button>
+                    )}
+                    {existingStatus === 'accepted' && (
+                      <Button className="flex-1" disabled>
+                        Application Accepted
+                      </Button>
+                    )}
+                    {existingStatus === 'rejected' && (
+                      <Button className="flex-1" variant="outline" disabled>
+                        Application Rejected
+                      </Button>
+                    )}
+                    {(existingStatus === null || existingStatus === undefined) && (
+                      <Button
+                        onClick={handleApply}
+                        className="flex-1"
+                        disabled={applying || existingStatus === undefined}
+                      >
+                        {applying ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                            Submitting...
+                          </>
+                        ) : (
+                          'Apply for Room'
+                        )}
+                      </Button>
+                    )}
+                  </>
+                )}
               </div>
             </CardContent>
           </Card>

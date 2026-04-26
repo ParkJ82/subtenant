@@ -5,8 +5,10 @@ import { TenantCard } from '@/components/tenant/tenant-card';
 import { SearchBar } from '@/components/layout/search-bar';
 import { TenantWithAccount } from '@/lib/types';
 import { Loader2 } from 'lucide-react';
+import { useAuth } from '@/lib/auth-context';
 
 export default function FindTenantsPage() {
+  const { user } = useAuth();
   const [tenants, setTenants] = useState<TenantWithAccount[]>([]);
   const [filteredTenants, setFilteredTenants] = useState<TenantWithAccount[]>([]);
   const [loading, setLoading] = useState(true);
@@ -90,7 +92,11 @@ export default function FindTenantsPage() {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredTenants.map((tenant) => (
-              <TenantCard key={tenant.tenantID} tenant={tenant} />
+              <TenantCard
+                key={tenant.tenantID}
+                tenant={tenant}
+                isOwnProfile={!!user && tenant.accountID === user.accountID}
+              />
             ))}
           </div>
         )}
