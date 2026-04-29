@@ -32,10 +32,25 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
 }
 
 export async function PUT(request: NextRequest, { params }: RouteContext) {
+  const userId = getUserIdFromRequest(request);
+  if (!userId) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const { id } = await params;
+  const roomID = parseInt(id);
+
   try {
+    const meta = await getRoomMeta(roomID);
+    if (!meta) {
+      return NextResponse.json({ error: 'Room not found' }, { status: 404 });
+    }
+    if (meta.ownerAccountID !== userId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     const body = await request.json();
-    const success = await roomApi.update(parseInt(id), body);
+    const success = await roomApi.update(roomID, body);
     if (!success) {
       return NextResponse.json({ error: 'Failed to update room' }, { status: 400 });
     }

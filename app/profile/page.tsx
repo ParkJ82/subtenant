@@ -111,6 +111,15 @@ export default function ProfilePage() {
     isListed: true,
   });
 
+  const [editingListing, setEditingListing] = useState(false);
+  const [listingEditError, setListingEditError] = useState<string | null>(null);
+  const [listingEditForm, setListingEditForm] = useState({
+    monthlyRent: '',
+    availableFrom: '',
+    availableTo: '',
+    description: '',
+  });
+
   const handleLogout = () => {
     logout();
     window.location.href = '/';
@@ -278,6 +287,64 @@ export default function ProfilePage() {
     setEditing(false);
     setSaveError(null);
   };
+
+  const handleEditListingOpen = () => {
+    if (!myRoom) return;
+    setListingEditForm({
+      monthlyRent: myRoom.monthlyRent?.toString() || '',
+      availableFrom: myRoom.availableFrom ? myRoom.availableFrom.toString().slice(0, 10) : '',
+      availableTo: myRoom.availableTo ? myRoom.availableTo.toString().slice(0, 10) : '',
+      description: myRoom.description || '',
+    });
+    setListingEditError(null);
+    setEditingListing(true);
+  };
+
+  const handleEditListingCancel = () => {
+    setEditingListing(false);
+    setListingEditError(null);
+  };
+
+  const handleEditListingSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!myRoom || !token) return;
+    setRoomActionLoading(true);
+    setListingEditError(null);
+
+    try {
+      const body = {
+        monthlyRent: listingEditForm.monthlyRent ? parseFloat(listingEditForm.monthlyRent) : myRoom.monthlyRent,
+        availableFrom: listingEditForm.availableFrom || null,
+        availableTo: listingEditForm.availableTo || null,
+        roomDescription: listingEditForm.description || null,
+      };
+
+      const res = await fetch(`/api/rooms/${myRoom.roomID}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || 'Failed to update listing');
+      }
+
+      // Refresh room data
+      const roomRes = await fetch(`/api/rooms?subleasorAccountID=${user?.accountID}`);
+      if (roomRes.ok) setMyRoom(await roomRes.json());
+
+      setEditingListing(false);
+    } catch (err: unknown) {
+      setListingEditError(err instanceof Error ? err.message : 'Failed to update listing');
+    } finally {
+      setRoomActionLoading(false);
+    }
+  };
+
 
   const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -612,105 +679,219 @@ export default function ProfilePage() {
                 </CardContent>
               ) : (
                 <CardContent className="px-6 py-5 space-y-3">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <Link
-                        href={`/sublease/${myRoom.roomID}`}
-                        className="text-lg font-semibold text-blue-600 hover:underline"
-                      >
-                        {myRoom.suite?.property?.propertyName}
-                      </Link>
-                      <p className="text-sm text-gray-500">
-                        {myRoom.suite?.property?.address}, {myRoom.suite?.property?.city},{' '}
-                        {myRoom.suite?.property?.state}
-                      </p>
-                    </div>
-                    <Badge variant={myRoom.isListed ? 'default' : 'secondary'}>
-                      {myRoom.isListed ? 'Listed' : 'Unlisted'}
-                    </Badge>
-                  </div>
+                  {editingListing ? (
+                    <form onSubmit={handleEditListingSubmit} className="space-y-4">
+                      <h3 className="font-semibold text-gray-900">Edit Listing</h3>
+                      
+                      <div className="space-y-1">
+                        <Label htmlFor="listing-rent">Monthly Rent ($)</Label>
+                        <Input
+                          id="listing-rent"
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={listingEditForm.monthlyRent}
+                          onChange={(e) =>
+                            setListingEditForm({ ...listingEditForm, monthlyRent: e.target.value })
+                          }
+                          required
+                        />
+                      </div>
 
-                  <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm text-gray-600">
-                    <p>
-                      <span className="font-medium">Rent:</span> ${myRoom.monthlyRent}/mo
-                    </p>
-                    <p>
-                      <span className="font-medium">Type:</span>{' '}
-                      {myRoom.suite?.property?.propertyType ?? '—'}
-                    </p>
-                    <p>
-                      <span className="font-medium">Available:</span>{' '}
-                      {formatDate(myRoom.availableFrom)} – {formatDate(myRoom.availableTo)}
-                    </p>
-                    {myRoom.amenities?.length > 0 && (
-                      <p>
-                        <span className="font-medium">Amenities:</span>{' '}
-                        {myRoom.amenities.map((a: any) => a.amenityName).join(', ')}
-                      </p>
-                    )}
-                  </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-1">
+                          <Label htmlFor="listing-from">Available From</Label>
+                          <Input
+                            id="listing-from"
+                            type="date"
+                            value={listingEditForm.availableFrom}
+                            onChange={(e) =>
+                              setListingEditForm({ ...listingEditForm, availableFrom: e.target.value })
+                            }
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label htmlFor="listing-to">Available To</Label>
+                          <Input
+                            id="listing-to"
+                            type="date"
+                            value={listingEditForm.availableTo}
+                            onChange={(e) =>
+                              setListingEditForm({ ...listingEditForm, availableTo: e.target.value })
+                            }
+                          />
+                        </div>
+                      </div>
 
-                  <div className="pt-2 flex flex-wrap gap-2 items-center">
-                    <Link href={`/sublease/${myRoom.roomID}`}>
-                      <Button variant="outline" size="sm">View Listing</Button>
-                    </Link>
+                      <div className="space-y-1">
+                        <Label htmlFor="listing-desc">Description</Label>
+                        <Textarea
+                          id="listing-desc"
+                          rows={3}
+                          value={listingEditForm.description}
+                          onChange={(e) =>
+                            setListingEditForm({ ...listingEditForm, description: e.target.value })
+                          }
+                          placeholder="Tell potential tenants about your room..."
+                        />
+                      </div>
 
-                    {roomLocked ? (
-                      <p className="text-xs text-gray-500">
-                        This listing has an active contract and cannot be modified or deleted.
-                      </p>
-                    ) : (
-                      <>
-                        {myRoom.isListed ? (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="text-amber-600 border-amber-300 hover:bg-amber-50"
-                            disabled={roomActionLoading}
-                            onClick={handleToggleListed}
-                          >
-                            {roomActionLoading ? (
-                              <Loader2 className="w-3 h-3 animate-spin" />
-                            ) : (
-                              'Unlist'
-                            )}
-                          </Button>
-                        ) : listingFilled ? (
-                          <p className="text-xs text-gray-500">
-                            This listing has been filled and cannot be re-listed.
-                          </p>
-                        ) : (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="text-green-600 border-green-300 hover:bg-green-50"
-                            disabled={roomActionLoading}
-                            onClick={handleToggleListed}
-                          >
-                            {roomActionLoading ? (
-                              <Loader2 className="w-3 h-3 animate-spin" />
-                            ) : (
-                              'Re-list'
-                            )}
-                          </Button>
-                        )}
+                      {listingEditError && (
+                        <p className="text-sm text-red-600 bg-red-50 p-3 rounded">{listingEditError}</p>
+                      )}
 
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="text-red-600 border-red-300 hover:bg-red-50"
-                          disabled={roomActionLoading}
-                          onClick={handleDeleteListing}
-                        >
+                      <div className="flex gap-3 pt-2">
+                        <Button type="submit" disabled={roomActionLoading}>
                           {roomActionLoading ? (
-                            <Loader2 className="w-3 h-3 animate-spin" />
+                            <>
+                              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                              Saving...
+                            </>
                           ) : (
-                            'Delete Listing'
+                            <>
+                              <Check className="w-4 h-4 mr-2" />
+                              Save Changes
+                            </>
                           )}
                         </Button>
-                      </>
-                    )}
-                  </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={handleEditListingCancel}
+                          disabled={roomActionLoading}
+                        >
+                          <X className="w-4 h-4 mr-2" />
+                          Cancel
+                        </Button>
+                      </div>
+                    </form>
+                  ) : (
+                    <>
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <Link
+                            href={`/sublease/${myRoom.roomID}`}
+                            className="text-lg font-semibold text-blue-600 hover:underline"
+                          >
+                            {myRoom.suite?.property?.propertyName}
+                          </Link>
+                          <p className="text-sm text-gray-500">
+                            {myRoom.suite?.property?.address}, {myRoom.suite?.property?.city},{' '}
+                            {myRoom.suite?.property?.state}
+                          </p>
+                        </div>
+                        <Badge variant={myRoom.isListed ? 'default' : 'secondary'}>
+                          {myRoom.isListed ? 'Listed' : 'Unlisted'}
+                        </Badge>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm text-gray-600">
+                        <p>
+                          <span className="font-medium">Rent:</span> ${myRoom.monthlyRent}/mo
+                        </p>
+                        <p>
+                          <span className="font-medium">Type:</span>{' '}
+                          {myRoom.suite?.property?.propertyType ?? '—'}
+                        </p>
+                        <p>
+                          <span className="font-medium">Available:</span>{' '}
+                          {formatDate(myRoom.availableFrom)} – {formatDate(myRoom.availableTo)}
+                        </p>
+                        {myRoom.amenities?.length > 0 && (
+                          <p>
+                            <span className="font-medium">Amenities:</span>{' '}
+                            {myRoom.amenities.map((a: any) => a.amenityName).join(', ')}
+                          </p>
+                        )}
+                      </div>
+
+                      {myRoom.description && (
+                        <div className="text-sm text-gray-600 border-t pt-2">
+                          <p className="font-medium">Description</p>
+                          <p>{myRoom.description}</p>
+                        </div>
+                      )}
+
+                      <div className="pt-2 flex flex-wrap gap-2 items-center">
+                        <Link href={`/sublease/${myRoom.roomID}`}>
+                          <Button variant="outline" size="sm">View Listing</Button>
+                        </Link>
+
+                        {roomLocked ? (
+                          <p className="text-xs text-gray-500">
+                            This listing has an active contract and cannot be modified or deleted.
+                          </p>
+                        ) : (
+                          <>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="text-blue-600 border-blue-300 hover:bg-blue-50"
+                              disabled={roomActionLoading}
+                              onClick={handleEditListingOpen}
+                            >
+                              {roomActionLoading ? (
+                                <Loader2 className="w-3 h-3 animate-spin" />
+                              ) : (
+                                <>
+                                  <Edit className="w-4 h-4 mr-1" />
+                                  Edit
+                                </>
+                              )}
+                            </Button>
+
+                            {myRoom.isListed ? (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="text-amber-600 border-amber-300 hover:bg-amber-50"
+                                disabled={roomActionLoading}
+                                onClick={handleToggleListed}
+                              >
+                                {roomActionLoading ? (
+                                  <Loader2 className="w-3 h-3 animate-spin" />
+                                ) : (
+                                  'Unlist'
+                                )}
+                              </Button>
+                            ) : listingFilled ? (
+                              <p className="text-xs text-gray-500">
+                                This listing has been filled and cannot be re-listed.
+                              </p>
+                            ) : (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="text-green-600 border-green-300 hover:bg-green-50"
+                                disabled={roomActionLoading}
+                                onClick={handleToggleListed}
+                              >
+                                {roomActionLoading ? (
+                                  <Loader2 className="w-3 h-3 animate-spin" />
+                                ) : (
+                                  'Re-list'
+                                )}
+                              </Button>
+                            )}
+
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="text-red-600 border-red-300 hover:bg-red-50"
+                              disabled={roomActionLoading}
+                              onClick={handleDeleteListing}
+                            >
+                              {roomActionLoading ? (
+                                <Loader2 className="w-3 h-3 animate-spin" />
+                              ) : (
+                                'Delete Listing'
+                              )}
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                    </>
+                  )}
                 </CardContent>
               )}
             </Card>
