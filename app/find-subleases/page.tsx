@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react';
 import { RoomCard } from '@/components/sublease/room-card';
 import { SearchBar } from '@/components/layout/search-bar';
-import { RoomListItem } from '@/lib/types';
+import { RoomFilterDialog } from '@/components/sublease/room-filter-dialog';
+import { RoomListItem, RoomFilters } from '@/lib/types';
 import { Loader2 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 
@@ -14,12 +15,14 @@ export default function FindSubleasesPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [activeFilters, setActiveFilters] = useState<RoomFilters>({});
   // roomID → application status, populated only when logged in
   const [appStatusMap, setAppStatusMap] = useState<Map<number, 'pending' | 'accepted' | 'rejected'>>(new Map());
 
   useEffect(() => {
     loadRooms();
-  }, []);
+  }, [activeFilters]);
 
   // Fetch the user's sent applications once when auth state settles
   useEffect(() => {
@@ -40,11 +43,24 @@ export default function FindSubleasesPage() {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch('/api/rooms');
+      const url = new URL('/api/rooms', window.location.origin);
+      
+      // Add active filters to URL
+      if (activeFilters.location) url.searchParams.append('location', activeFilters.location);
+      if (activeFilters.minPrice !== undefined) url.searchParams.append('minPrice', activeFilters.minPrice.toString());
+      if (activeFilters.maxPrice !== undefined) url.searchParams.append('maxPrice', activeFilters.maxPrice.toString());
+      if (activeFilters.availableFrom) url.searchParams.append('availableFrom', activeFilters.availableFrom);
+      if (activeFilters.availableTo) url.searchParams.append('availableTo', activeFilters.availableTo);
+      if (activeFilters.propertyType) url.searchParams.append('propertyType', activeFilters.propertyType);
+      if (activeFilters.amenityIDs) {
+        activeFilters.amenityIDs.forEach(id => url.searchParams.append('amenityIDs', id.toString()));
+      }
+
+      const response = await fetch(url.toString());
       if (!response.ok) throw new Error('Failed to fetch rooms');
       const data = await response.json();
       setRooms(data);
-      setFilteredRooms(data);
+      applySearchAndFilters(data, searchQuery);
     } catch (err) {
       console.error('Failed to load rooms:', err);
       setError('Failed to load rooms. Please try again later.');
@@ -53,14 +69,13 @@ export default function FindSubleasesPage() {
     }
   };
 
-  const handleSearch = (query: string) => {
-    setSearchQuery(query);
+  const applySearchAndFilters = (roomsData: RoomListItem[], query: string) => {
     if (!query.trim()) {
-      setFilteredRooms(rooms);
+      setFilteredRooms(roomsData);
       return;
     }
 
-    const filtered = rooms.filter(room =>
+    const filtered = roomsData.filter(room =>
       room.propertyName.toLowerCase().includes(query.toLowerCase()) ||
       room.city.toLowerCase().includes(query.toLowerCase()) ||
       room.state.toLowerCase().includes(query.toLowerCase()) ||
@@ -69,6 +84,19 @@ export default function FindSubleasesPage() {
       room.subleasorName.toLowerCase().includes(query.toLowerCase())
     );
     setFilteredRooms(filtered);
+  };
+
+  const handleSearch = (query: string) => {
+    setSearchQuery(query);
+    applySearchAndFilters(rooms, query);
+  };
+
+  const handleFilterClick = () => {
+    setFilterOpen(true);
+  };
+
+  const handleApplyFilters = (filters: RoomFilters) => {
+    setActiveFilters(filters);
   };
 
   return (
@@ -85,6 +113,8 @@ export default function FindSubleasesPage() {
           <SearchBar
             placeholder="Search by location, price, or description..."
             onSearch={handleSearch}
+            onFilterClick={handleFilterClick}
+            showFilterButton={true}
           />
         </div>
 
@@ -121,6 +151,12 @@ export default function FindSubleasesPage() {
           </div>
         )}
       </div>
+
+      <RoomFilterDialog
+        open={filterOpen}
+        onOpenChange={setFilterOpen}
+        onApplyFilters={handleApplyFilters}
+      />
     </div>
   );
 }

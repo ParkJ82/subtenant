@@ -83,7 +83,7 @@ export async function POST(request: NextRequest) {
     // Prevent applying to your own listing
     const ownerRows = await query(
       `SELECT s.accountID FROM RoomInfo r
-       JOIN Subleasor s ON r.subleasorID = s.subleasorID
+       INNER JOIN Subleasor s ON r.subleasorID = s.subleasorID
        WHERE r.roomID = ?`,
       [parseInt(roomID)]
     ) as any[];

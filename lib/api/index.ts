@@ -68,7 +68,7 @@ export const tenantApi = {
     let sql = `
       SELECT t.*, a.name, a.email, a.bio, a.dateOfBirth, a.phoneNumber
       FROM Tenant t
-      JOIN Account a ON t.accountID = a.accountID
+      INNER JOIN Account a ON t.accountID = a.accountID
       WHERE t.isListed = TRUE
     `;
     const params: any[] = [];
@@ -117,7 +117,7 @@ export const tenantApi = {
     const sql = `
       SELECT t.*, a.name, a.email, a.bio, a.dateOfBirth, a.phoneNumber
       FROM Tenant t
-      JOIN Account a ON t.accountID = a.accountID
+      INNER JOIN Account a ON t.accountID = a.accountID
       WHERE t.tenantID = ?
     `;
     const result = await query(sql, [tenantID]) as any[];
@@ -147,7 +147,7 @@ export const tenantApi = {
     const sql = `
       SELECT t.*, a.name, a.email, a.bio, a.dateOfBirth, a.phoneNumber
       FROM Tenant t
-      JOIN Account a ON t.accountID = a.accountID
+      INNER JOIN Account a ON t.accountID = a.accountID
       WHERE t.accountID = ?
     `;
     const result = await query(sql, [accountID]) as any[];
@@ -265,10 +265,10 @@ export const roomApi = {
         a.name as subleasorName,
         a.email as subleasorEmail
       FROM RoomInfo r
-      JOIN SuiteInfo s ON r.suiteID = s.suiteID
-      JOIN Property p ON s.propertyID = p.propertyID
-      JOIN Subleasor sub ON r.subleasorID = sub.subleasorID
-      JOIN Account a ON sub.accountID = a.accountID
+      INNER JOIN SuiteInfo s ON r.suiteID = s.suiteID
+      INNER JOIN Property p ON s.propertyID = p.propertyID
+      INNER JOIN Subleasor sub ON r.subleasorID = sub.subleasorID
+      INNER JOIN Account a ON sub.accountID = a.accountID
       WHERE r.isListed = TRUE
     `;
     const params: any[] = [];
@@ -324,7 +324,7 @@ export const roomApi = {
 
       const amenities = await query(`
         SELECT a.* FROM Amenity a
-        JOIN RoomAmenity ra ON a.amenityID = ra.amenityID
+        INNER JOIN RoomAmenity ra ON a.amenityID = ra.amenityID
         WHERE ra.roomID = ?
       `, [row.roomID]) as any[];
 
@@ -371,10 +371,10 @@ export const roomApi = {
         a.name as subleasorName,
         a.email as subleasorEmail
       FROM RoomInfo r
-      JOIN SuiteInfo s ON r.suiteID = s.suiteID
-      JOIN Property p ON s.propertyID = p.propertyID
-      JOIN Subleasor sub ON r.subleasorID = sub.subleasorID
-      JOIN Account a ON sub.accountID = a.accountID
+      INNER JOIN SuiteInfo s ON r.suiteID = s.suiteID
+      INNER JOIN Property p ON s.propertyID = p.propertyID
+      INNER JOIN Subleasor sub ON r.subleasorID = sub.subleasorID
+      INNER JOIN Account a ON sub.accountID = a.accountID
       WHERE r.roomID = ?
     `;
     const result = await query(sql, [roomID]) as any[];
@@ -389,7 +389,7 @@ export const roomApi = {
 
     const amenities = await query(`
       SELECT a.* FROM Amenity a
-      JOIN RoomAmenity ra ON a.amenityID = ra.amenityID
+      INNER JOIN RoomAmenity ra ON a.amenityID = ra.amenityID
       WHERE ra.roomID = ?
     `, [roomID]) as any[];
 
@@ -463,10 +463,10 @@ export const roomApi = {
         a.name as subleasorName,
         a.email as subleasorEmail
       FROM RoomInfo r
-      JOIN SuiteInfo s ON r.suiteID = s.suiteID
-      JOIN Property p ON s.propertyID = p.propertyID
-      JOIN Subleasor sub ON r.subleasorID = sub.subleasorID
-      JOIN Account a ON sub.accountID = a.accountID
+      INNER JOIN SuiteInfo s ON r.suiteID = s.suiteID
+      INNER JOIN Property p ON s.propertyID = p.propertyID
+      INNER JOIN Subleasor sub ON r.subleasorID = sub.subleasorID
+      INNER JOIN Account a ON sub.accountID = a.accountID
       WHERE sub.accountID = ?
     `;
     const result = await query(sql, [accountID]) as any[];
@@ -481,7 +481,7 @@ export const roomApi = {
 
     const amenities = await query(`
       SELECT a.* FROM Amenity a
-      JOIN RoomAmenity ra ON a.amenityID = ra.amenityID
+      INNER JOIN RoomAmenity ra ON a.amenityID = ra.amenityID
       WHERE ra.roomID = ?
     `, [row.roomID]) as any[];
 
@@ -721,9 +721,9 @@ export const applicationApi = {
         r.monthlyRent, r.availableFrom, r.availableTo,
         p.propertyName, p.address, p.city, p.state
       FROM Application a
-      JOIN RoomInfo r ON a.roomID = r.roomID
-      JOIN SuiteInfo s ON r.suiteID = s.suiteID
-      JOIN Property p ON s.propertyID = p.propertyID
+      INNER JOIN RoomInfo r ON a.roomID = r.roomID
+      INNER JOIN SuiteInfo s ON r.suiteID = s.suiteID
+      INNER JOIN Property p ON s.propertyID = p.propertyID
       WHERE a.tenantID = ?
       ORDER BY a.appliedAt DESC
     `;
@@ -739,12 +739,12 @@ export const applicationApi = {
         acc.name  AS applicantName,
         acc.email AS applicantEmail
       FROM Application a
-      JOIN RoomInfo r   ON a.roomID     = r.roomID
-      JOIN SuiteInfo s  ON r.suiteID    = s.suiteID
-      JOIN Property p   ON s.propertyID = p.propertyID
-      JOIN Subleasor sub ON r.subleasorID = sub.subleasorID
-      JOIN Tenant t     ON a.tenantID   = t.tenantID
-      JOIN Account acc  ON t.accountID  = acc.accountID
+      INNER JOIN RoomInfo r   ON a.roomID     = r.roomID
+      INNER JOIN SuiteInfo s  ON r.suiteID    = s.suiteID
+      INNER JOIN Property p   ON s.propertyID = p.propertyID
+      INNER JOIN Subleasor sub ON r.subleasorID = sub.subleasorID
+      INNER JOIN Tenant t     ON a.tenantID   = t.tenantID
+      INNER JOIN Account acc  ON t.accountID  = acc.accountID
       WHERE sub.accountID = ?
       ORDER BY a.appliedAt DESC
     `;
@@ -760,9 +760,9 @@ export const applicationApi = {
         t.accountID   AS tenantAccountID,
         sub.accountID AS subleasorAccountID
       FROM Application a
-      JOIN Tenant t      ON a.tenantID    = t.tenantID
-      JOIN RoomInfo r    ON a.roomID      = r.roomID
-      JOIN Subleasor sub ON r.subleasorID = sub.subleasorID
+      INNER JOIN Tenant t      ON a.tenantID    = t.tenantID
+      INNER JOIN RoomInfo r    ON a.roomID      = r.roomID
+      INNER JOIN Subleasor sub ON r.subleasorID = sub.subleasorID
       WHERE a.applicationID = ?
     `;
     const rows = await query(sql, [applicationID]) as any[];
@@ -805,7 +805,7 @@ export const contractApi = {
     const appResult = await query(`
       SELECT a.*, r.availableFrom, r.availableTo, r.monthlyRent
       FROM Application a
-      JOIN RoomInfo r ON a.roomID = r.roomID
+      INNER JOIN RoomInfo r ON a.roomID = r.roomID
       WHERE a.applicationID = ?
     `, [applicationID]) as any[];
     const app = appResult[0];
@@ -849,9 +849,9 @@ export const contractApi = {
         c.leaseStart, c.leaseEnd, c.monthlyRent, c.signedAt,
         p.propertyName, p.address, p.city, p.state
       FROM Contract c
-      JOIN RoomInfo r ON c.roomID = r.roomID
-      JOIN SuiteInfo s ON r.suiteID = s.suiteID
-      JOIN Property p ON s.propertyID = p.propertyID
+      INNER JOIN RoomInfo r ON c.roomID = r.roomID
+      INNER JOIN SuiteInfo s ON r.suiteID = s.suiteID
+      INNER JOIN Property p ON s.propertyID = p.propertyID
       WHERE c.tenantID = ?
       ORDER BY c.signedAt DESC
     `;
@@ -872,13 +872,13 @@ export const contractApi = {
         sa.email       AS subleasorEmail,
         sa.phoneNumber AS subleasorPhone
       FROM Contract c
-      JOIN RoomInfo r    ON c.roomID      = r.roomID
-      JOIN SuiteInfo s   ON r.suiteID     = s.suiteID
-      JOIN Property p    ON s.propertyID  = p.propertyID
-      JOIN Subleasor sub ON r.subleasorID = sub.subleasorID
-      JOIN Tenant t      ON c.tenantID    = t.tenantID
-      JOIN Account ta    ON t.accountID   = ta.accountID
-      JOIN Account sa    ON sub.accountID = sa.accountID
+      INNER JOIN RoomInfo r    ON c.roomID      = r.roomID
+      INNER JOIN SuiteInfo s   ON r.suiteID     = s.suiteID
+      INNER JOIN Property p    ON s.propertyID  = p.propertyID
+      INNER JOIN Subleasor sub ON r.subleasorID = sub.subleasorID
+      INNER JOIN Tenant t      ON c.tenantID    = t.tenantID
+      INNER JOIN Account ta    ON t.accountID   = ta.accountID
+      INNER JOIN Account sa    ON sub.accountID = sa.accountID
       WHERE t.accountID = ? OR sub.accountID = ?
       ORDER BY c.signedAt DESC
     `;

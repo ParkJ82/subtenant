@@ -20,7 +20,7 @@ SELECT
     a.name,
     a.bio
 FROM Tenant t
-JOIN Account a ON t.accountID = a.accountID
+INNER JOIN Account a ON t.accountID = a.accountID
 WHERE t.isListed = TRUE;
 
 CREATE OR REPLACE VIEW v_public_rooms AS
@@ -38,10 +38,10 @@ SELECT
     p.state,
     a.name AS subleasorName
 FROM RoomInfo r
-JOIN SuiteInfo s ON r.suiteID = s.suiteID
-JOIN Property p ON s.propertyID = p.propertyID
-JOIN Subleasor sub ON r.subleasorID = sub.subleasorID
-JOIN Account a ON sub.accountID = a.accountID
+INNER JOIN SuiteInfo s ON r.suiteID = s.suiteID
+INNER JOIN Property p ON s.propertyID = p.propertyID
+INNER JOIN Subleasor sub ON r.subleasorID = sub.subleasorID
+INNER JOIN Account a ON sub.accountID = a.accountID
 WHERE r.isListed = TRUE;
 
 -- 4. Add indexes for frequently queried columns
@@ -106,10 +106,24 @@ BEGIN
         r.availableTo,
         r.isListed
     FROM RoomInfo r
-    JOIN SuiteInfo s ON r.suiteID = s.suiteID
-    JOIN Property p ON s.propertyID = p.propertyID
-    JOIN Subleasor sub ON r.subleasorID = sub.subleasorID
+    INNER JOIN SuiteInfo s ON r.suiteID = s.suiteID
+    INNER JOIN Property p ON s.propertyID = p.propertyID
+    INNER JOIN Subleasor sub ON r.subleasorID = sub.subleasorID
     WHERE sub.accountID = p_accountID;
+END //
+
+-- 5b. Create a function to count incoming applications for a subleasor
+CREATE FUNCTION count_incoming_applications_by_subleasor(p_subleasor_id INT) RETURNS INT
+DETERMINISTIC
+READS SQL DATA
+BEGIN
+    DECLARE incoming_count INT;
+    SELECT COUNT(a.applicationID) INTO incoming_count
+    FROM Application a
+    INNER JOIN RoomInfo r ON a.roomID = r.roomID
+    INNER JOIN Subleasor sub ON r.subleasorID = sub.subleasorID
+    WHERE sub.subleasorID = p_subleasor_id AND a.status = 'pending';
+    RETURN COALESCE(incoming_count, 0);
 END //
 
 DELIMITER ;
@@ -144,6 +158,17 @@ BEGIN
     -- Set default status
     IF NEW.status IS NULL THEN
         SET NEW.status = 'pending';
+    END IF;
+END //
+
+-- Trigger to automatically delist a room when an application is accepted
+CREATE TRIGGER after_application_accepted
+AFTER UPDATE ON Application
+FOR EACH ROW
+BEGIN
+    -- When an application is accepted, mark the room as no longer listed
+    IF NEW.status = 'accepted' AND OLD.status != 'accepted' THEN
+        UPDATE RoomInfo SET isListed = FALSE WHERE roomID = NEW.roomID;
     END IF;
 END //
 

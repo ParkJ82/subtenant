@@ -23,8 +23,8 @@ export async function GET(request: NextRequest) {
     const availableFrom = searchParams.get('availableFrom') || undefined;
     const availableTo = searchParams.get('availableTo') || undefined;
     const propertyType = searchParams.get('propertyType') || undefined;
-    const amenityIDs = searchParams.get('amenityIDs')
-      ? searchParams.get('amenityIDs')!.split(',').map(Number)
+    const amenityIDs = searchParams.getAll('amenityIDs')
+      ? searchParams.getAll('amenityIDs').map(Number)
       : undefined;
 
     const rooms = await roomApi.getAll({

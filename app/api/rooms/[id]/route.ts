@@ -10,8 +10,8 @@ async function getRoomMeta(roomID: number) {
   const rows = await query(`
     SELECT r.suiteID, s.propertyID, sub.accountID AS ownerAccountID
     FROM RoomInfo r
-    JOIN SuiteInfo s   ON r.suiteID    = s.suiteID
-    JOIN Subleasor sub ON r.subleasorID = sub.subleasorID
+    INNER JOIN SuiteInfo s   ON r.suiteID    = s.suiteID
+    INNER JOIN Subleasor sub ON r.subleasorID = sub.subleasorID
     WHERE r.roomID = ?
   `, [roomID]) as any[];
   return rows[0] ?? null;
@@ -76,7 +76,7 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
     if (isListed === true) {
       const activeContract = await query(
         `SELECT c.contractID FROM Contract c
-         JOIN Application a ON c.applicationID = a.applicationID
+         INNER JOIN Application a ON c.applicationID = a.applicationID
          WHERE a.roomID = ? AND a.status = 'accepted' AND c.leaseEnd >= CURDATE()`,
         [roomID]
       ) as any[];
@@ -118,7 +118,7 @@ export async function DELETE(request: NextRequest, { params }: RouteContext) {
     // Block deletion while an active contract exists
     const activeContract = await query(
       `SELECT c.contractID FROM Contract c
-       JOIN Application a ON c.applicationID = a.applicationID
+       INNER JOIN Application a ON c.applicationID = a.applicationID
        WHERE a.roomID = ? AND a.status = 'accepted' AND c.leaseEnd >= CURDATE()`,
       [roomID]
     ) as any[];

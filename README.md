@@ -7,7 +7,7 @@ A mobile-first Next.js application for connecting interns with sublease opportun
 - **Find Tenants**: Browse and search for interns looking for subleases
 - **Find Subleases**: Discover available rooms and apartments
 - **Tenant Profiles**: Detailed view of tenant preferences and requirements
-- **Room Listings**: Comprehensive room information with images and amenities
+- **Room Listings**: Comprehensive room information with apartment video and amenities
 - **Create Listings**: Post tenant profiles or room listings
 - **User Authentication**: Secure login and registration
 - **User Profile**: Manage account information and listings

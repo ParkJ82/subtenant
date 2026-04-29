@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react';
 import { TenantCard } from '@/components/tenant/tenant-card';
 import { SearchBar } from '@/components/layout/search-bar';
-import { TenantWithAccount } from '@/lib/types';
+import { TenantFilterDialog } from '@/components/tenant/tenant-filter-dialog';
+import { TenantWithAccount, TenantFilters } from '@/lib/types';
 import { Loader2 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 
@@ -14,20 +15,30 @@ export default function FindTenantsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [filterOpen, setFilterOpen] = useState(false);
+  const [activeFilters, setActiveFilters] = useState<TenantFilters>({});
 
   useEffect(() => {
     loadTenants();
-  }, []);
+  }, [activeFilters]);
 
   const loadTenants = async () => {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch('/api/tenants');
+      const url = new URL('/api/tenants', window.location.origin);
+      
+      // Add active filters to URL
+      if (activeFilters.location) url.searchParams.append('location', activeFilters.location);
+      if (activeFilters.companyName) url.searchParams.append('companyName', activeFilters.companyName);
+      if (activeFilters.availableFrom) url.searchParams.append('availableFrom', activeFilters.availableFrom);
+      if (activeFilters.availableTo) url.searchParams.append('availableTo', activeFilters.availableTo);
+
+      const response = await fetch(url.toString());
       if (!response.ok) throw new Error('Failed to fetch tenants');
       const data = await response.json();
       setTenants(data);
-      setFilteredTenants(data);
+      applySearchAndFilters(data, searchQuery);
     } catch (err) {
       console.error('Failed to load tenants:', err);
       setError('Failed to load tenants. Please try again later.');
@@ -36,20 +47,32 @@ export default function FindTenantsPage() {
     }
   };
 
-  const handleSearch = (query: string) => {
-    setSearchQuery(query);
+  const applySearchAndFilters = (tenantsData: TenantWithAccount[], query: string) => {
     if (!query.trim()) {
-      setFilteredTenants(tenants);
+      setFilteredTenants(tenantsData);
       return;
     }
 
-    const filtered = tenants.filter(tenant =>
+    const filtered = tenantsData.filter(tenant =>
       tenant.account.name.toLowerCase().includes(query.toLowerCase()) ||
       tenant.account.email.toLowerCase().includes(query.toLowerCase()) ||
       (tenant.companyName && tenant.companyName.toLowerCase().includes(query.toLowerCase())) ||
       (tenant.account.bio && tenant.account.bio.toLowerCase().includes(query.toLowerCase()))
     );
     setFilteredTenants(filtered);
+  };
+
+  const handleSearch = (query: string) => {
+    setSearchQuery(query);
+    applySearchAndFilters(tenants, query);
+  };
+
+  const handleFilterClick = () => {
+    setFilterOpen(true);
+  };
+
+  const handleApplyFilters = (filters: TenantFilters) => {
+    setActiveFilters(filters);
   };
 
   return (
@@ -66,6 +89,8 @@ export default function FindTenantsPage() {
           <SearchBar
             placeholder="Search by name, company, or description..."
             onSearch={handleSearch}
+            onFilterClick={handleFilterClick}
+            showFilterButton={true}
           />
         </div>
 
@@ -101,6 +126,12 @@ export default function FindTenantsPage() {
           </div>
         )}
       </div>
+
+      <TenantFilterDialog
+        open={filterOpen}
+        onOpenChange={setFilterOpen}
+        onApplyFilters={handleApplyFilters}
+      />
     </div>
   );
 }
