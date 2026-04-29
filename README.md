@@ -182,4 +182,4 @@ The application is designed with a mobile-first approach:
 
 ## License
 
-MIT
+MIT license
