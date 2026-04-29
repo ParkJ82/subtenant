@@ -12,6 +12,7 @@ import { TenantFormData, RoomFormData, Amenity } from '@/lib/types';
 import { Loader2, CheckCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
+import Link from 'next/link';
 
 interface ExistingTenant {
   tenantID: number;
@@ -23,7 +24,7 @@ interface ExistingTenant {
 
 export default function CreateListingPage() {
   const router = useRouter();
-  const { user, token } = useAuth();
+  const { user, token, isAuthenticated, loading } = useAuth();
   const [activeTab, setActiveTab] = useState<'tenant' | 'room'>('tenant');
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -268,6 +269,29 @@ export default function CreateListingPage() {
         : [...prev, amenityID]
     );
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-gray-500">Loading...</div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated || !user) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <Card className="w-full max-w-md">
+          <CardContent className="pt-6 text-center">
+            <p className="text-gray-600 mb-4">Please log in to create a listing.</p>
+            <Link href="/login">
+              <Button>Login</Button>
+            </Link>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   if (success) {
     return (
